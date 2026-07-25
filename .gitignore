@@ -2,8 +2,11 @@ node_modules/
 dist/
 .next/
 *.tsbuildinfo
+*.log
+*.err
 coverage/
 data/*.sqlite
 data/*.sqlite-shm
 data/*.sqlite-wal
 .env
+.env.local
