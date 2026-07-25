@@ -11,3 +11,5 @@ export interface PricingRuleResult {
 export interface PricingRule {
   calculate(context: PricingRuleContext): PricingRuleResult;
 }
+
+export const PRICING_RULE = Symbol('PRICING_RULE');

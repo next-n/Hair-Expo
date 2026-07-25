@@ -35,7 +35,7 @@ describe('database initialization', () => {
     service.onModuleInit();
     service.onModuleInit();
     expect(service.connection.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get())
-      .toEqual({ count: 2 });
+      .toEqual({ count: 3 });
   });
 
   it('enforces foreign keys and keeps pragmas after reopening the file', () => {
