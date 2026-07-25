@@ -4,7 +4,9 @@ import { CheckoutIntakeService } from '../src/checkout-intake/checkout-intake.se
 import { CheckoutIntakeRequestDto } from '../src/checkout-intake/checkout-intake.dto';
 import { DatabaseService } from '../src/database/database.service';
 import { FakePaymentProvider } from '../src/payment-provider/fake-payment-provider';
-import { MockPricingRule } from '../src/pricing/mock-pricing-rule';
+import { DefaultPricingEngine } from '../src/pricing/default-pricing-engine';
+import { MockPriceSource } from '../src/pricing/mock-price-source';
+import { PricingService } from '../src/pricing/pricing.service';
 
 describe('first vertical checkout flow', () => {
   let database: DatabaseService;
@@ -17,7 +19,7 @@ describe('first vertical checkout flow', () => {
     database.onModuleInit();
     intake = new CheckoutIntakeService(database);
     paymentProvider = new FakePaymentProvider();
-    core = new CheckoutCoreService(database, new MockPricingRule(), paymentProvider);
+    core = new CheckoutCoreService(database, new PricingService(new DefaultPricingEngine(), new MockPriceSource()), paymentProvider);
   });
 
   afterEach(() => database.onModuleDestroy());

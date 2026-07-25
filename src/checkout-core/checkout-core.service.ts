@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { DatabaseService } from '../database/database.service';
 import { Inject } from '@nestjs/common';
 import { PAYMENT_PROVIDER, PaymentProvider, PaymentProviderResult } from '../payment-provider/payment-provider';
-import { PRICING_RULE, PricingRule } from '../pricing/pricing-rule';
+import { PricingService } from '../pricing/pricing.service';
 
 type CheckoutOperationRow = {
   id: string;
@@ -31,8 +31,7 @@ type CheckoutResult = {
 export class CheckoutCoreService {
   constructor(
     private readonly database: DatabaseService,
-    @Inject(PRICING_RULE)
-    private readonly pricingRule: PricingRule,
+    private readonly pricingService: PricingService,
     @Inject(PAYMENT_PROVIDER)
     private readonly paymentProvider: PaymentProvider,
   ) {}
@@ -48,7 +47,10 @@ export class CheckoutCoreService {
       currency: string;
       items: Array<{ productId: string; quantity: number }>;
     };
-    const pricing = this.pricingRule.calculate({ currency: request.currency, items: request.items });
+    const pricing = this.pricingService.calculate({
+      currency: request.currency,
+      items: request.items.map((item, index) => ({ itemRef: `item-${index + 1}`, ...item })),
+    });
     const providerIdempotencyKey = `checkout:${operationId}:attempt:1`;
     const attemptId = randomUUID();
     const now = new Date().toISOString();
@@ -58,7 +60,7 @@ export class CheckoutCoreService {
         UPDATE checkout_operations
         SET status = 'payment_pending', total_amount_minor = ?, currency = ?, updated_at = ?
         WHERE id = ? AND status = 'processing'
-      `).run(pricing.totalAmountMinor, request.currency, now, operationId);
+      `).run(pricing.totalMinor, request.currency, now, operationId);
       if (updated.changes !== 1) throw new ConflictException('Checkout operation is no longer claimable');
       this.database.connection.prepare(`
         INSERT INTO checkout_attempts
@@ -73,13 +75,13 @@ export class CheckoutCoreService {
       providerResult = await this.paymentProvider.createCheckoutSession({
         paymentAttemptId: attemptId,
         providerIdempotencyKey,
-        amountMinor: pricing.totalAmountMinor,
+        amountMinor: pricing.totalMinor,
         currency: request.currency,
       });
     } catch (error) {
       return this.saveFailure(operationId, attemptId, error);
     }
-    return this.saveProviderResult(operationId, attemptId, providerResult, pricing.totalAmountMinor, request.currency);
+    return this.saveProviderResult(operationId, attemptId, providerResult, pricing.totalMinor, request.currency);
   }
 
   private claim(operationId: string): CheckoutOperationRow {
