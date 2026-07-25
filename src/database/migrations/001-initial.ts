@@ -53,6 +53,8 @@ export const initialMigration: Migration = {
     );
     CREATE TABLE checkout_operations (
       id TEXT PRIMARY KEY,
+      actor_id TEXT NOT NULL DEFAULT 'anonymous',
+      operation_type TEXT NOT NULL DEFAULT 'checkout_intake',
       client_idempotency_key TEXT NOT NULL UNIQUE,
       request_hash TEXT NOT NULL,
       request_json TEXT NOT NULL,

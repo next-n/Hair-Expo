@@ -5,12 +5,17 @@ import { DatabaseService } from '../src/database/database.service';
 
 describe('database initialization', () => {
   let directory: string;
+  let services: DatabaseService[];
 
-  beforeEach(() => { directory = mkdtempSync(join(tmpdir(), 'hair-expo-')); });
-  afterEach(() => { rmSync(directory, { recursive: true, force: true }); });
+  beforeEach(() => { directory = mkdtempSync(join(tmpdir(), 'hair-expo-')); services = []; });
+  afterEach(() => {
+    for (const service of services) service.onModuleDestroy();
+    rmSync(directory, { recursive: true, force: true });
+  });
 
   it('enables required SQLite pragmas and applies migrations', () => {
     const service = new DatabaseService(join(directory, 'test.sqlite'));
+    services.push(service);
     service.onModuleInit();
     expect(service.connection.pragma('journal_mode', { simple: true })).toBe('wal');
     expect(service.connection.pragma('foreign_keys', { simple: true })).toBe(1);
@@ -22,34 +27,35 @@ describe('database initialization', () => {
         { name: 'order_items' }, { name: 'checkout_operations' }, { name: 'checkout_attempts' },
         { name: 'processed_webhook_events' }, { name: 'audit_records' },
       ]));
-    service.onModuleDestroy();
   });
 
   it('runs an applied migration only once', () => {
     const service = new DatabaseService(join(directory, 'test.sqlite'));
+    services.push(service);
     service.onModuleInit();
     service.onModuleInit();
     expect(service.connection.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get())
-      .toEqual({ count: 1 });
-    service.onModuleDestroy();
+      .toEqual({ count: 2 });
   });
 
   it('enforces foreign keys and keeps pragmas after reopening the file', () => {
     const path = join(directory, 'reopen.sqlite');
     const first = new DatabaseService(path);
+    services.push(first);
     first.onModuleInit();
     expect(() => first.connection.prepare(`INSERT INTO price_list_items
       (price_list_version_id, product_id, unit_amount_minor, created_at)
       VALUES (?, ?, ?, ?)`).run('missing-version', 'missing-product', 100, new Date().toISOString()))
       .toThrow();
     first.onModuleDestroy();
+    services = services.filter((service) => service !== first);
 
     const second = new DatabaseService(path);
+    services.push(second);
     expect(second.connection.pragma('journal_mode', { simple: true })).toBe('wal');
     expect(second.connection.pragma('foreign_keys', { simple: true })).toBe(1);
     expect(second.connection.pragma('busy_timeout', { simple: true })).toBe(5000);
     expect(second.connection.pragma('synchronous', { simple: true })).toBe(2);
-    second.onModuleDestroy();
   });
 });
 
