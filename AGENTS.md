@@ -3,10 +3,12 @@
 ## Confirmed architecture
 
 - Build a NestJS modular monolith.
+- Keep the NestJS application inside `backend/` and the Next.js application inside `frontend/`.
 - Use SQLite as the database.
 - Enable SQLite WAL mode.
 - Operate as one deployment for now.
-- Add the frontend later; this repository currently defines the backend foundation.
+- Use the frontend for interaction only; the backend remains the authority for pricing and checkout totals.
+- The frontend may display backend results, but it must never calculate or authoritatively choose payment totals.
 - Keep Stripe/provider network calls outside database transactions.
 - Use explicit application modules and replaceable interfaces for pricing and payment providers.
 
@@ -60,3 +62,5 @@
 - Prefer deterministic, testable application services over controller-level business logic.
 - Add tests for idempotency conflicts, duplicate retries, invalid state transitions, transaction boundaries, and webhook deduplication.
 - Keep provider adapters thin; Stripe-specific code belongs in an infrastructure adapter.
+- Never commit secrets, real credentials, or sensitive environment files.
+- Test retry, duplicate, failure, offline-cart, and provider-idempotency paths.

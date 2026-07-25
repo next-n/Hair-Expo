@@ -1,0 +1,29 @@
+:root { color-scheme: light; --ink: #17202a; --muted: #667085; --line: #e4e7ec; --accent: #7a3df0; --soft: #f7f5ff; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #f7f8fa; color: var(--ink); font-family: Arial, sans-serif; }
+button, input, select { font: inherit; }
+button { cursor: pointer; }
+.shell { max-width: 1180px; margin: 0 auto; padding: 24px; }
+.topbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 24px; }
+.brand { margin: 0; font-size: clamp(24px, 4vw, 36px); }
+.status { color: var(--muted); font-size: 14px; }
+.grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 20px; align-items: start; }
+.panel { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 20px; box-shadow: 0 8px 24px #1018280a; }
+.panel h2 { margin-top: 0; }
+.products { display: grid; gap: 12px; }
+.product { border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 10px; }
+.product-row, .cart-row, .total-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.muted { color: var(--muted); }
+.button { border: 0; border-radius: 10px; padding: 13px 16px; background: var(--accent); color: #fff; font-weight: 700; min-height: 48px; }
+.button.secondary { background: var(--soft); color: var(--accent); }
+.button:disabled { opacity: .5; cursor: not-allowed; }
+.controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+input, select { width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 11px; color: var(--ink); background: #fff; }
+.cart { display: grid; gap: 12px; }
+.cart-row { border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+.actions { display: grid; gap: 10px; margin-top: 18px; }
+.error { background: #fff1f0; color: #b42318; padding: 12px; border-radius: 10px; }
+.success { background: #ecfdf3; color: #027a48; padding: 12px; border-radius: 10px; }
+.qr { display: grid; place-items: center; gap: 12px; margin-top: 18px; padding: 18px; background: var(--soft); border-radius: 14px; }
+@media (max-width: 800px) { .shell { padding: 14px; } .grid { grid-template-columns: 1fr; } .topbar { align-items: flex-start; flex-direction: column; } }

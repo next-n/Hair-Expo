@@ -1,28 +1,63 @@
 # Hair Expo Checkout
 
-Backend foundation for a small expo checkout and payment tool.
+NestJS backend and Next.js tablet-first frontend for a small expo checkout and payment tool.
+
+## Repository structure
+
+```text
+backend/    NestJS modular monolith, SQLite migrations, pricing, checkout, fake provider
+frontend/   Next.js App Router booth checkout UI
+AGENTS.md   permanent engineering constraints
+```
 
 ## Requirements
 
 - Node.js 20+
 - npm 10+
 
-## Setup
+## Backend setup
 
 ```bash
-npm install
+cd backend
+npm install --legacy-peer-deps
 Copy-Item .env.example .env
 npm run build
+npm run typecheck
 npm test
 npm run lint
 npm run start:dev
 ```
 
-The application loads `.env` at startup.
+Backend environment variables are `PORT` and `DATABASE_PATH`. The backend loads `.env` at startup and runs migrations automatically.
+
+## Frontend setup
+
+```bash
+cd frontend
+npm install
+Copy-Item .env.example .env.local
+npm run typecheck
+npm run lint
+npm run build
+npm run dev
+```
+
+The frontend uses `NEXT_PUBLIC_BACKEND_URL` and does not contain authoritative pricing logic.
 
 The default database is `./data/hair-expo.sqlite`. The application creates its parent directory, enables SQLite WAL mode, foreign keys, `busy_timeout=5000`, and `synchronous=FULL`, then applies pending migrations on startup.
 
 Set `DATABASE_PATH` to use another SQLite file. Tests use temporary databases and do not modify the development database.
+
+## API and mock flow
+
+- `GET /health`
+- `GET /catalog/products`
+- `POST /orders/preview` — backend-only price preview
+- `POST /checkout-intake` — durable idempotent intake
+- `POST /checkout/:operationId/process` — fake provider checkout
+- `GET /checkout/:operationId` — operation status/retry lookup
+
+The frontend persists its draft cart in local storage, reuses one idempotency key for one checkout intention, submits all previews and totals to the backend, and renders the stable fake checkout URL as a QR code. Starting a new order clears the cart and creates a new intent key.
 
 ## Pricing architecture
 
@@ -45,4 +80,4 @@ Blonde, expo, volume, Trial Pack, and CNY behavior are intentionally disabled pl
 
 ## Foundation scope
 
-This phase defines the NestJS modules, SQLite migration infrastructure, catalog/order/checkout/payment/webhook/audit tables, replaceable pricing and payment interfaces, and a fake payment provider. Provider network calls are intentionally not implemented. Stripe, final pricing rules, tax, discounts, inventory, fulfillment, and frontend behavior remain for later phases when the assignment brief and CSV schema are available.
+Stripe, authentication, final pricing rules, tax, discounts, inventory, fulfillment, settlement, and frontend production polish remain unresolved until the assignment brief and CSV schema arrive. Kafka, microservices, wallet ledger, KYC, and settlement are out of scope.
