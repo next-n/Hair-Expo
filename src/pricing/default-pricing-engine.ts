@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PricingEngine } from './pricing-engine';
 import { PricingAdjustment, PricingAdjustmentScope, PricingContext, PricingInput, PricingLine, PricingResult, PricingRule, PricingRuleScope } from './pricing-rule';
-import { assertNonNegativeInteger } from './pricing-math';
+import { addMinor, assertNonNegativeInteger, multiplyMinor } from './pricing-math';
 
 const RULE_VERSION = 'pricing-foundation-v1';
 
@@ -25,7 +25,7 @@ export class DefaultPricingEngine implements PricingEngine {
       assertNonNegativeInteger(item.baseUnitPriceMinor, `baseUnitPriceMinor for ${item.itemRef}`);
       if (item.weightGrams !== undefined && (item.weightGrams < 0 || !Number.isFinite(item.weightGrams))) throw new Error(`weightGrams for ${item.itemRef} must be non-negative`);
       if (item.lengthInches !== undefined && (item.lengthInches < 0 || !Number.isFinite(item.lengthInches))) throw new Error(`lengthInches for ${item.itemRef} must be non-negative`);
-      const lineTotalMinor = item.baseUnitPriceMinor * item.quantity;
+      const lineTotalMinor = multiplyMinor(item.baseUnitPriceMinor, item.quantity, `lineTotalMinor for ${item.itemRef}`);
       assertNonNegativeInteger(lineTotalMinor, `lineTotalMinor for ${item.itemRef}`);
       return {
         itemRef: item.itemRef,
@@ -94,13 +94,13 @@ export class DefaultPricingEngine implements PricingEngine {
     let total = startingMinor;
     for (const adjustment of adjustments) {
       if (adjustment.scope !== scope) continue;
-      total += adjustment.type === 'SURCHARGE' ? adjustment.amountMinor : -adjustment.amountMinor;
+      total = addMinor(total, adjustment.type === 'SURCHARGE' ? adjustment.amountMinor : -adjustment.amountMinor, `${scope} total`);
     }
     return total;
   }
 
   private sum(values: readonly number[]): number {
-    const total = values.reduce((sum, value) => sum + value, 0);
+    const total = values.reduce((sum, value) => addMinor(sum, value, 'subtotal'), 0);
     assertNonNegativeInteger(total, 'totalMinor');
     return total;
   }

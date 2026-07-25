@@ -94,6 +94,7 @@ describe('DefaultPricingEngine', () => {
     expect(() => new DefaultPricingEngine().calculate({ currency: 'USD', items: [item({ quantity: -1 })] })).toThrow();
     expect(() => new DefaultPricingEngine().calculate({ currency: 'USD', items: [item({ baseUnitPriceMinor: -1 })] })).toThrow();
     expect(() => new DefaultPricingEngine().calculate({ currency: 'USD', items: [item({ weightGrams: -1 })] })).toThrow();
+    expect(() => new DefaultPricingEngine().calculate({ currency: 'USD', items: [item({ baseUnitPriceMinor: Number.MAX_SAFE_INTEGER, quantity: 2 })] })).toThrow(/safe integer range/);
   });
 
   it('uses explicit integer percentage rounding', () => {
