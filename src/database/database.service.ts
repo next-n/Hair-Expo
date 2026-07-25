@@ -4,7 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { DATABASE_PATH } from './database.module';
 import { runMigrations } from './migrations/migration-runner';
-import { initialMigration } from './migrations/001-initial';
+import { migrations } from './migrations';
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
@@ -21,7 +21,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleInit(): void {
-    runMigrations(this.connection, [initialMigration]);
+    runMigrations(this.connection, migrations);
   }
 
   onModuleDestroy(): void {

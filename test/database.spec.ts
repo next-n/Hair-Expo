@@ -33,6 +33,24 @@ describe('database initialization', () => {
       .toEqual({ count: 1 });
     service.onModuleDestroy();
   });
+
+  it('enforces foreign keys and keeps pragmas after reopening the file', () => {
+    const path = join(directory, 'reopen.sqlite');
+    const first = new DatabaseService(path);
+    first.onModuleInit();
+    expect(() => first.connection.prepare(`INSERT INTO price_list_items
+      (price_list_version_id, product_id, unit_amount_minor, created_at)
+      VALUES (?, ?, ?, ?)`).run('missing-version', 'missing-product', 100, new Date().toISOString()))
+      .toThrow();
+    first.onModuleDestroy();
+
+    const second = new DatabaseService(path);
+    expect(second.connection.pragma('journal_mode', { simple: true })).toBe('wal');
+    expect(second.connection.pragma('foreign_keys', { simple: true })).toBe(1);
+    expect(second.connection.pragma('busy_timeout', { simple: true })).toBe(5000);
+    expect(second.connection.pragma('synchronous', { simple: true })).toBe(2);
+    second.onModuleDestroy();
+  });
 });
 
 describe('migration schema constraints', () => {

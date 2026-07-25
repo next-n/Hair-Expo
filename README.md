@@ -11,13 +11,14 @@ Backend foundation for a small expo checkout and payment tool.
 
 ```bash
 npm install
-copy .env.example .env
+Copy-Item .env.example .env
 npm run build
 npm test
+npm run lint
 npm run start:dev
 ```
 
-On PowerShell, use `Copy-Item .env.example .env` instead of `copy` if needed.
+The application loads `.env` at startup.
 
 The default database is `./data/hair-expo.sqlite`. The application creates its parent directory, enables SQLite WAL mode, foreign keys, `busy_timeout=5000`, and `synchronous=FULL`, then applies pending migrations on startup.
 
