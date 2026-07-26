@@ -4,34 +4,24 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../lib/api';
 import { COMPANY_DETAILS, COMPANY_NAME } from '../../../lib/company';
+import { formatMinor, LanguageSwitcher, localizeError, useI18n } from '../../../lib/i18n';
 import { Order } from '../../../lib/types';
 
-function money(minor: number, symbol: string): string {
-  const whole = Math.floor(minor / 100);
-  return `${symbol}${whole.toLocaleString('en-US')}.${String(minor % 100).padStart(2, '0')}`;
-}
-
 export default function OrderPage() {
+  const { locale, t } = useI18n();
   const { orderId } = useParams<{ orderId: string }>();
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const money = (minor: number, currency: string) => formatMinor(minor, currency, locale);
 
   const loadOrder = useCallback(async (reconcile = false) => {
-    try {
-      setOrder(await (reconcile ? api.refreshOrder(orderId) : api.order(orderId)));
-      setError('');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to load this order.');
-    } finally {
-      setLoading(false);
-    }
-  }, [orderId]);
+    try { setOrder(await (reconcile ? api.refreshOrder(orderId) : api.order(orderId))); setError(''); }
+    catch (cause) { setError(localizeError(cause, t)); }
+    finally { setLoading(false); }
+  }, [orderId, t]);
 
-  useEffect(() => {
-    void loadOrder();
-  }, [loadOrder]);
-
+  useEffect(() => { void loadOrder(); }, [loadOrder]);
   useEffect(() => {
     if (!order || order.paymentStatus === 'paid') return undefined;
     const timer = window.setInterval(() => void loadOrder(), 3000);
@@ -41,24 +31,18 @@ export default function OrderPage() {
   return (
     <main className="shell auth-shell">
       <section className="panel order-status-page">
-        <p className="status"><a className="company-link" href="/">{COMPANY_NAME}</a> · Payment</p>
+        <div className="top-actions"><LanguageSwitcher /></div>
+        <p className="status"><a className="company-link" href="/">{COMPANY_NAME}</a> · {t('payment')}</p>
         <p className="muted">{COMPANY_DETAILS}</p>
-        <h1 className="brand">{order ? order.orderNumber : 'Order status'}</h1>
-        {loading && <p className="muted">Loading order status…</p>}
+        <h1 className="brand">{order ? order.orderNumber : t('orderStatus')}</h1>
+        {loading && <p className="muted">{t('loadingOrderStatus')}</p>}
         {error && <p className="error">{error}</p>}
-        {order && (
-          <>
-            <p className={order.paymentStatus === 'paid' ? 'paid' : 'pending'}>
-              {order.paymentStatus === 'paid' ? 'Payment confirmed' : 'Payment pending'}
-            </p>
-            <p className="total-row">
-              <span>Total</span>
-              <strong>{money(order.totalAmountMinor, order.currency === 'CNY' ? '¥' : '$')}</strong>
-            </p>
-            {order.paymentStatus !== 'paid' && <p className="muted">This page checks the backend every few seconds for the Stripe webhook update.</p>}
-            <button className="button secondary" onClick={() => void loadOrder(true)}>Refresh status</button>
-          </>
-        )}
+        {order && <>
+          <p className={order.paymentStatus === 'paid' ? 'paid' : 'pending'}>{order.paymentStatus === 'paid' ? t('paymentConfirmed') : t('paymentPending')}</p>
+          <p className="total-row"><span>{t('total')}</span><strong>{money(order.totalAmountMinor, order.currency)}</strong></p>
+          {order.paymentStatus !== 'paid' && <p className="muted">{t('statusPolling')}</p>}
+          <button className="button secondary" onClick={() => void loadOrder(true)}>{t('refreshStatus')}</button>
+        </>}
       </section>
     </main>
   );

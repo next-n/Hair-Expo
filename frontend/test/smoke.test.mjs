@@ -6,7 +6,8 @@ test('frontend application entrypoint exists', async () => {
   const page = await readFile(new URL('../app/page.tsx', import.meta.url), 'utf8');
   assert.match(page, /export default function HomePage/);
   assert.match(page, /setInterval/);
-  assert.match(page, /Paid — Start new order/);
+  assert.match(page, /paidStartNewOrder/);
+  assert.match(page, /LanguageSwitcher/);
   assert.match(page, /CHECKOUT_KEY/);
 });
 
@@ -19,8 +20,18 @@ test('order status route exists', async () => {
 test('orders list route exists', async () => {
   const page = await readFile(new URL('../app/orders/page.tsx', import.meta.url), 'utf8');
   assert.match(page, /export default function OrdersPage/);
-  assert.match(page, /Print \/ PDF/);
+  assert.match(page, /printPdf/);
   assert.match(page, /href="\/"/);
   assert.match(page, /COMPANY_DETAILS/);
   assert.match(page, /company-link/);
+});
+
+test('supported locales include Burmese', async () => {
+  const i18n = await readFile(new URL('../lib/i18n.tsx', import.meta.url), 'utf8');
+  assert.match(i18n, /'my'/);
+  assert.match(i18n, /burmese: 'မြန်မာ'/);
+  assert.match(i18n, /browser\.startsWith\('my'\)/);
+  assert.match(i18n, /option value="my"/);
+  assert.match(i18n, /errorQuantityLimit/);
+  assert.match(i18n, /outside the allowed range/);
 });

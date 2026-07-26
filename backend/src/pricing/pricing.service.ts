@@ -21,7 +21,7 @@ export class PricingService {
   ) {}
 
   calculate(draft: NormalizedOrderDraft): PriceSnapshot {
-    if (draft.items.length < 1 || draft.items.length > CHECKOUT_LIMITS.maxItems) throw new Error('Order must contain between 1 and 100 items');
+    if (draft.items.length < 1 || draft.items.length > CHECKOUT_LIMITS.maxItems) throw new Error(`Order must contain between 1 and ${CHECKOUT_LIMITS.maxItems} items`);
     for (const item of draft.items) {
       if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > CHECKOUT_LIMITS.maxQuantity) throw new Error('Quantity is outside the allowed range');
       if (item.weightGrams !== undefined && (item.weightGrams < 0 || item.weightGrams > CHECKOUT_LIMITS.maxWeightGrams)) throw new Error('Weight is outside the allowed range');

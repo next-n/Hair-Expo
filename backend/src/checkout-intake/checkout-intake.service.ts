@@ -32,7 +32,7 @@ export class CheckoutIntakeService {
   constructor(private readonly database: DatabaseService, private readonly catalog?: CatalogService) {}
 
   intake(actorId: string, idempotencyKey: string, request: CheckoutIntakeRequestDto): CheckoutIntakeResult {
-    if (request.items.length < 1 || request.items.length > CHECKOUT_LIMITS.maxItems) throw new BadRequestException('Checkout must contain between 1 and 100 items');
+    if (request.items.length < 1 || request.items.length > CHECKOUT_LIMITS.maxItems) throw new BadRequestException(`Checkout must contain between 1 and ${CHECKOUT_LIMITS.maxItems} items`);
     for (const item of request.items) {
       if (item.quantity < 1 || item.quantity > CHECKOUT_LIMITS.maxQuantity) throw new BadRequestException('Quantity is outside the allowed range');
       if (item.weightGrams !== undefined && (item.weightGrams < 0 || item.weightGrams > CHECKOUT_LIMITS.maxWeightGrams)) throw new BadRequestException('Weight is outside the allowed range');

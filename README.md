@@ -56,9 +56,12 @@ STRIPE_WEBHOOK_SECRET=whsec_...
 FRONTEND_URL=http://localhost:4421
 APP_PASSCODE=change-me
 CATALOG_CSV_PATH=./data/trunov_price_list.csv
+CHECKOUT_MAX_QUANTITY=10000
 ```
 
 Set `PAYMENT_PROVIDER=stripe` only with a Stripe test key. Startup rejects keys that do not begin with `sk_test_`. Secrets are server-only, ignored by Git, and never sent to the frontend. `APP_PASSCODE` enables the small signed HttpOnly-cookie booth boundary; leaving it empty disables the boundary for local development.
+
+`CHECKOUT_MAX_QUANTITY` is an operational request-safety ceiling, not a pricing or catalog rule. It defaults to 10,000 units per line and can be raised through the backend environment when a wholesale order requires more; the frontend does not impose a separate business quantity limit.
 
 Frontend `.env.local`:
 
@@ -69,6 +72,14 @@ NEXT_PUBLIC_INVOICE_COMPANY_DETAILS=Expo booth · Company details placeholder
 ```
 
 Invoice company details are public frontend configuration, not secrets. Change these values in `frontend/.env.local` and restart the frontend before printing new invoices. Booth staff do not edit company identity per order.
+
+## Localization
+
+The frontend supports English (`en`), Simplified Chinese (`zh-CN`), Russian (`ru`), and Burmese (`my`). The language selector is available on the booth, orders, and order-status screens. The selected locale is stored in the browser under `hair-expo-locale`, so a refresh keeps the operator's choice; a first visit uses the browser language when it matches a supported locale and otherwise falls back to English.
+
+User-interface text is kept in `frontend/lib/i18n.tsx`. Backend error codes are mapped to localized messages at the frontend boundary, while catalog names, SKUs, product attributes, and pricing-rule codes remain source/business data rather than translated UI copy. Money and dates are formatted for display with `Intl`; authoritative amounts remain integer minor units from the backend and are never recalculated in the browser. Invoice printouts use the selected locale and the public company values from `frontend/.env.local`.
+
+To add or replace a translation, update the message dictionaries in `frontend/lib/i18n.tsx` for all supported locales and keep the message keys identical. To add a language, extend the locale type, dictionary, browser-language mapping, and selector options together, then add smoke coverage for the new option.
 
 ## Catalog import
 
