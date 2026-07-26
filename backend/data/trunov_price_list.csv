@@ -1,0 +1,76 @@
+sku,line,product_type,length_in,unit,pack_weight_g,price_usd,price_cny
+SD-KT-18,Single-Donor,Keratin Tips 100 pcs,18,pack_100pcs,67,65,455
+SD-KT-20,Single-Donor,Keratin Tips 100 pcs,20,pack_100pcs,70,85,595
+SD-KT-22,Single-Donor,Keratin Tips 100 pcs,22,pack_100pcs,70,100,700
+SD-KT-24,Single-Donor,Keratin Tips 100 pcs,24,pack_100pcs,75,125,875
+SD-KT-26,Single-Donor,Keratin Tips 100 pcs,26,pack_100pcs,75,135,945
+SD-KT-28,Single-Donor,Keratin Tips 100 pcs,28,pack_100pcs,85,160,1120
+SD-KT-30,Single-Donor,Keratin Tips 100 pcs,30,pack_100pcs,85,175,1225
+SD-TI-18,Single-Donor,Tape-in pack of 20,18,pack_20pcs,42,40,280
+SD-TI-20,Single-Donor,Tape-in pack of 20,20,pack_20pcs,45,55,385
+SD-TI-22,Single-Donor,Tape-in pack of 20,22,pack_20pcs,47,70,490
+SD-TI-24,Single-Donor,Tape-in pack of 20,24,pack_20pcs,50,85,595
+SD-TI-26,Single-Donor,Tape-in pack of 20,26,pack_20pcs,52,95,665
+SD-TI-28,Single-Donor,Tape-in pack of 20,28,pack_20pcs,55,105,735
+SD-TI-30,Single-Donor,Tape-in pack of 20,30,pack_20pcs,57,120,840
+SD-GW-18,Single-Donor,Genius Weft per 100 g,18,per_100g,100,95,665
+SD-GW-20,Single-Donor,Genius Weft per 100 g,20,per_100g,100,115,805
+SD-GW-22,Single-Donor,Genius Weft per 100 g,22,per_100g,100,140,980
+SD-GW-24,Single-Donor,Genius Weft per 100 g,24,per_100g,100,165,1155
+SD-GW-26,Single-Donor,Genius Weft per 100 g,26,per_100g,100,175,1225
+SD-GW-28,Single-Donor,Genius Weft per 100 g,28,per_100g,100,185,1295
+SD-GW-30,Single-Donor,Genius Weft per 100 g,30,per_100g,100,205,1435
+SD-HB-18,Single-Donor,Hair Bulk per 100 g,18,per_100g,100,75,525
+SD-HB-20,Single-Donor,Hair Bulk per 100 g,20,per_100g,100,95,665
+SD-HB-22,Single-Donor,Hair Bulk per 100 g,22,per_100g,100,120,840
+SD-HB-24,Single-Donor,Hair Bulk per 100 g,24,per_100g,100,145,1015
+SD-HB-26,Single-Donor,Hair Bulk per 100 g,26,per_100g,100,155,1085
+SD-HB-28,Single-Donor,Hair Bulk per 100 g,28,per_100g,100,165,1155
+SD-HB-30,Single-Donor,Hair Bulk per 100 g,30,per_100g,100,185,1295
+MG-KT-18,Magnetar,Keratin Tips 100 pcs,18,pack_100pcs,67,55,385
+MG-KT-20,Magnetar,Keratin Tips 100 pcs,20,pack_100pcs,70,70,490
+MG-KT-22,Magnetar,Keratin Tips 100 pcs,22,pack_100pcs,70,90,630
+MG-KT-24,Magnetar,Keratin Tips 100 pcs,24,pack_100pcs,75,115,805
+MG-KT-26,Magnetar,Keratin Tips 100 pcs,26,pack_100pcs,75,120,840
+MG-KT-28,Magnetar,Keratin Tips 100 pcs,28,pack_100pcs,85,145,1015
+MG-KT-30,Magnetar,Keratin Tips 100 pcs,30,pack_100pcs,85,165,1155
+MG-TI-18,Magnetar,Tape-in pack of 20,18,pack_20pcs,42,35,245
+MG-TI-20,Magnetar,Tape-in pack of 20,20,pack_20pcs,45,45,315
+MG-TI-22,Magnetar,Tape-in pack of 20,22,pack_20pcs,47,60,420
+MG-TI-24,Magnetar,Tape-in pack of 20,24,pack_20pcs,50,75,525
+MG-TI-26,Magnetar,Tape-in pack of 20,26,pack_20pcs,52,85,595
+MG-TI-28,Magnetar,Tape-in pack of 20,28,pack_20pcs,55,95,665
+MG-TI-30,Magnetar,Tape-in pack of 20,30,pack_20pcs,57,110,770
+MG-GW-18,Magnetar,Genius Weft per 100 g,18,per_100g,100,85,595
+MG-GW-20,Magnetar,Genius Weft per 100 g,20,per_100g,100,105,735
+MG-GW-22,Magnetar,Genius Weft per 100 g,22,per_100g,100,130,910
+MG-GW-24,Magnetar,Genius Weft per 100 g,24,per_100g,100,155,1085
+MG-GW-26,Magnetar,Genius Weft per 100 g,26,per_100g,100,165,1155
+MG-GW-28,Magnetar,Genius Weft per 100 g,28,per_100g,100,175,1225
+MG-GW-30,Magnetar,Genius Weft per 100 g,30,per_100g,100,195,1365
+MG-HB-18,Magnetar,Hair Bulk per 100 g,18,per_100g,100,65,455
+MG-HB-20,Magnetar,Hair Bulk per 100 g,20,per_100g,100,85,595
+MG-HB-22,Magnetar,Hair Bulk per 100 g,22,per_100g,100,110,770
+MG-HB-24,Magnetar,Hair Bulk per 100 g,24,per_100g,100,135,945
+MG-HB-26,Magnetar,Hair Bulk per 100 g,26,per_100g,100,145,1015
+MG-HB-28,Magnetar,Hair Bulk per 100 g,28,per_100g,100,155,1085
+MG-HB-30,Magnetar,Hair Bulk per 100 g,30,per_100g,100,175,1225
+RAW-SLV-1820,Raw Hair,Slavic Hair Type per kg,18-20,per_kg,1000,1200,8400
+RAW-SLV-2224,Raw Hair,Slavic Hair Type per kg,22-24,per_kg,1000,1500,10500
+RAW-SLV-2426,Raw Hair,Slavic Hair Type per kg,24-26,per_kg,1000,1700,11900
+RAW-SLV-2830,Raw Hair,Slavic Hair Type per kg,28-30,per_kg,1000,2000,14000
+RAW-MM-18,Raw Hair,Myanmar Donor Hair per kg,18,per_kg,1000,350,2450
+RAW-MM-20,Raw Hair,Myanmar Donor Hair per kg,20,per_kg,1000,550,3850
+RAW-MM-22,Raw Hair,Myanmar Donor Hair per kg,22,per_kg,1000,700,4900
+RAW-MM-24,Raw Hair,Myanmar Donor Hair per kg,24,per_kg,1000,850,5950
+RAW-MM-26,Raw Hair,Myanmar Donor Hair per kg,26,per_kg,1000,900,6300
+RAW-MM-28,Raw Hair,Myanmar Donor Hair per kg,28,per_kg,1000,1050,7350
+RAW-MM-30,Raw Hair,Myanmar Donor Hair per kg,30,per_kg,1000,1200,8400
+RAW-IN-18,Raw Hair,India Raw Hair per kg,18,per_kg,1000,700,4900
+RAW-IN-20,Raw Hair,India Raw Hair per kg,20,per_kg,1000,800,5600
+RAW-IN-22,Raw Hair,India Raw Hair per kg,22,per_kg,1000,900,6300
+RAW-IN-24,Raw Hair,India Raw Hair per kg,24,per_kg,1000,1000,7000
+RAW-IN-26,Raw Hair,India Raw Hair per kg,26,per_kg,1000,1100,7700
+RAW-IN-28,Raw Hair,India Raw Hair per kg,28,per_kg,1000,1250,8750
+RAW-IN-30,Raw Hair,India Raw Hair per kg,30,per_kg,1000,1350,9450
+PROMO-TRIAL,Promo,Trial Pack,,pack,,149,999
