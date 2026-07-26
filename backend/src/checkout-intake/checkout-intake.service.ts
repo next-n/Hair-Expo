@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { DatabaseService } from '../database/database.service';
+import { CatalogService } from '../catalog/catalog.service';
 import { buildCanonicalCheckoutRequest, canonicalJson, checkoutRequestHash } from './canonical-request';
 import { CheckoutIntakeRequestDto } from './checkout-intake.dto';
 import { CHECKOUT_LIMITS } from './request-limits';
@@ -28,7 +29,7 @@ export type CheckoutIntakeResult = {
 
 @Injectable()
 export class CheckoutIntakeService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(private readonly database: DatabaseService, private readonly catalog?: CatalogService) {}
 
   intake(actorId: string, idempotencyKey: string, request: CheckoutIntakeRequestDto): CheckoutIntakeResult {
     if (request.items.length < 1 || request.items.length > CHECKOUT_LIMITS.maxItems) throw new BadRequestException('Checkout must contain between 1 and 100 items');
@@ -38,7 +39,8 @@ export class CheckoutIntakeService {
       if (item.lengthInches !== undefined && (item.lengthInches < 0 || item.lengthInches > CHECKOUT_LIMITS.maxLengthInches)) throw new BadRequestException('Length is outside the allowed range');
       if (item.color !== undefined && item.color.length > CHECKOUT_LIMITS.maxColorLength) throw new BadRequestException('Color is too long');
     }
-    const canonicalRequest = buildCanonicalCheckoutRequest(request);
+    const skus = this.catalog ? request.items.map((item) => this.catalog?.getPrice(item.productId, item.variantId).sku) : undefined;
+    const canonicalRequest = buildCanonicalCheckoutRequest(request, skus);
     const requestJson = canonicalJson(canonicalRequest);
     const requestHash = checkoutRequestHash(requestJson);
     const now = new Date().toISOString();

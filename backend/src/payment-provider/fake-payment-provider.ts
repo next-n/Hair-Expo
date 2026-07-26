@@ -23,6 +23,7 @@ export class FakePaymentProvider implements PaymentProvider {
       status: 'created',
       providerReference: `fake_${stableId}`,
       checkoutUrl: `https://fake-payments.invalid/checkout/${stableId}`,
+      livemode: false,
     };
     this.results.set(request.providerIdempotencyKey, result);
     return result;

@@ -1,13 +1,25 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { PricingService } from '../pricing/pricing.service';
 import { OrderPreviewDto } from './order-preview.dto';
+import { OrdersService } from './orders.service';
+import { PasscodeGuard } from '../auth/auth.guard';
 
 @Controller('orders')
+@UseGuards(PasscodeGuard)
 export class OrdersController {
-  constructor(private readonly pricing: PricingService) {}
+  constructor(private readonly pricing: PricingService, private readonly orders: OrdersService) {}
+
+  @Get()
+  list() { return this.orders.list(); }
+
+  @Get(':orderId')
+  get(@Param('orderId') orderId: string) { return this.orders.get(orderId); }
+
+  @Post(':orderId/refresh')
+  refresh(@Param('orderId') orderId: string) { return this.orders.refresh(orderId); }
 
   @Post('preview')
   preview(@Body() draft: OrderPreviewDto) {
-    return this.pricing.calculate({ currency: draft.currency, items: draft.items.map((item, index) => ({ itemRef: `item-${index + 1}`, ...item })) });
+    return this.pricing.calculate({ currency: draft.currency, expoDiscountEnabled: draft.expoDiscountEnabled, items: draft.items.map((item, index) => ({ itemRef: `item-${index + 1}`, ...item })) });
   }
 }

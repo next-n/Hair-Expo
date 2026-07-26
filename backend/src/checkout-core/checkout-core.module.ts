@@ -3,9 +3,10 @@ import { PaymentProviderModule } from '../payment-provider/payment-provider.modu
 import { PricingModule } from '../pricing/pricing.module';
 import { CheckoutCoreController } from './checkout-core.controller';
 import { CheckoutCoreService } from './checkout-core.service';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [PricingModule, PaymentProviderModule],
+  imports: [PricingModule, PaymentProviderModule, AuthModule],
   controllers: [CheckoutCoreController],
   providers: [CheckoutCoreService],
 })

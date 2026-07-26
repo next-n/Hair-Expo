@@ -42,7 +42,7 @@ describe('first vertical checkout flow', () => {
     expect(database.connection.prepare('SELECT status FROM checkout_operations WHERE id = ?').get(operation.id))
       .toEqual({ status: 'completed' });
     expect(database.connection.prepare('SELECT status, provider_idempotency_key, checkout_url FROM checkout_attempts WHERE checkout_operation_id = ?').get(operation.id))
-      .toEqual(expect.objectContaining({ status: 'completed', provider_idempotency_key: `checkout:${operation.id}:attempt:1`, checkout_url: result.checkoutUrl }));
+      .toEqual(expect.objectContaining({ status: 'completed', provider_idempotency_key: `trunov:payment-link:${operation.id}`, checkout_url: result.checkoutUrl }));
   });
 
   it('returns the same URL on retry without calling the provider again', async () => {

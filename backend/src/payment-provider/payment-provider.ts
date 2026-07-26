@@ -3,6 +3,10 @@ export interface CreateCheckoutInput {
   readonly providerIdempotencyKey: string;
   readonly amountMinor: number;
   readonly currency: string;
+  readonly orderId?: string;
+  readonly orderNumber?: string;
+  readonly operationId?: string;
+  readonly frontendUrl?: string;
 }
 
 export interface CheckoutResult {
@@ -11,6 +15,12 @@ export interface CheckoutResult {
   readonly checkoutUrl?: string;
   readonly errorCode?: string;
   readonly errorMessage?: string;
+  readonly livemode?: boolean;
+  readonly providerProductId?: string;
+  readonly providerPriceId?: string;
+  readonly paymentLinkId?: string;
+  readonly checkoutSessionId?: string;
+  readonly paymentIntentId?: string;
 }
 
 export interface PaymentProvider {

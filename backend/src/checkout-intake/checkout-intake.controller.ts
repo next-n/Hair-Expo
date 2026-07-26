@@ -1,11 +1,13 @@
-import { BadRequestException, Body, Controller, Get, Headers, HttpCode, HttpStatus, Post, Res } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Headers, HttpCode, HttpStatus, Post, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { isUUID } from 'class-validator';
 import { BoothSessionService } from './booth-session.service';
 import { CheckoutIntakeRequestDto } from './checkout-intake.dto';
 import { CheckoutIntakeService } from './checkout-intake.service';
+import { PasscodeGuard } from '../auth/auth.guard';
 
 @Controller('checkout-intake')
+@UseGuards(PasscodeGuard)
 export class CheckoutIntakeController {
   constructor(private readonly intakeService: CheckoutIntakeService, private readonly boothSessions: BoothSessionService) {}
 

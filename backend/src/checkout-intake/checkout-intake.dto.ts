@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsOptional, IsString, IsUUID, Length, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsInt, IsOptional, IsString, IsUUID, Length, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { CHECKOUT_LIMITS } from './request-limits';
 
 export class CheckoutIntakeItemDto {
@@ -9,6 +9,10 @@ export class CheckoutIntakeItemDto {
   @IsOptional()
   @IsUUID()
   variantId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  blonde?: boolean;
 
   @IsInt()
   @Min(1)
@@ -44,4 +48,18 @@ export class CheckoutIntakeRequestDto {
   @ValidateNested({ each: true })
   @Type(() => CheckoutIntakeItemDto)
   items!: CheckoutIntakeItemDto[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  customerName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  customerContact?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  expoDiscountEnabled?: boolean;
 }

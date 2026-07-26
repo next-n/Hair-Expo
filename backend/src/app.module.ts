@@ -9,6 +9,7 @@ import { PaymentProviderModule } from './payment-provider/payment-provider.modul
 import { PricingModule } from './pricing/pricing.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { HealthModule } from './health/health.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { HealthModule } from './health/health.module';
     WebhooksModule,
     AuditModule,
     HealthModule,
+    AuthModule,
   ],
 })
 export class AppModule {}
