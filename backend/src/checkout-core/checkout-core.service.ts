@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { DatabaseService } from '../database/database.service';
 import { CheckoutResult as ProviderCheckoutResult, PAYMENT_PROVIDER, PaymentProvider } from '../payment-provider/payment-provider';
@@ -51,6 +51,8 @@ type CheckoutRequest = {
 
 @Injectable()
 export class CheckoutCoreService {
+  private readonly logger = new Logger(CheckoutCoreService.name);
+
   constructor(
     private readonly database: DatabaseService,
     private readonly pricingService: PricingService,
@@ -172,6 +174,7 @@ export class CheckoutCoreService {
   }
 
   private startLeaseRenewal(operationId: string, leaseToken: string): NodeJS.Timeout {
+    let renewalFailures = 0;
     const timer = setInterval(() => {
       try {
         const now = new Date();
@@ -181,8 +184,10 @@ export class CheckoutCoreService {
           WHERE id = ? AND status = 'payment_pending' AND processing_claim_token = ?
         `).run(new Date(now.getTime() + PROCESSING_LEASE_MS).toISOString(), now.toISOString(), operationId, leaseToken);
         if (updated.changes !== 1) clearInterval(timer);
-      } catch {
-        clearInterval(timer);
+        else renewalFailures = 0;
+      } catch (error) {
+        renewalFailures += 1;
+        this.logger.error(JSON.stringify({ operationId, renewalFailures, error: error instanceof Error ? error.message : String(error) }), undefined, CheckoutCoreService.name);
       }
     }, PROCESSING_LEASE_RENEWAL_MS);
     timer.unref();
