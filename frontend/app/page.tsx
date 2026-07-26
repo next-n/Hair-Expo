@@ -28,7 +28,7 @@ export default function HomePage() {
     const on = () => setOnline(true); const off = () => setOnline(false);
     window.addEventListener('online', on); window.addEventListener('offline', off);
     const saved = localStorage.getItem(CART_KEY); if (saved) setCart(JSON.parse(saved) as CartItem[]);
-    api.products().then((items) => { setProducts(items); if (items[0]) { setSelectedProduct(items[0].id); setSelectedVariant(items[0].variants[0]?.id ?? ''); } }).catch((e: Error) => setError(e.message));
+    api.session().then(() => api.products()).then((items) => { setProducts(items); if (items[0]) { setSelectedProduct(items[0].id); setSelectedVariant(items[0].variants[0]?.id ?? ''); } }).catch((e: Error) => setError(e.message));
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
   }, []);
 

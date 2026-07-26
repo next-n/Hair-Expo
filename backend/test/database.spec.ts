@@ -25,7 +25,8 @@ describe('database initialization', () => {
       .toEqual(expect.arrayContaining([
         { name: 'products' }, { name: 'price_list_versions' }, { name: 'orders' },
         { name: 'order_items' }, { name: 'checkout_operations' }, { name: 'checkout_attempts' },
-        { name: 'processed_webhook_events' }, { name: 'audit_records' },
+        { name: 'processed_webhook_events' }, { name: 'audit_records' }, { name: 'booth_sessions' },
+        { name: 'product_variants' }, { name: 'pricing_adjustments' },
       ]));
   });
 
@@ -35,7 +36,7 @@ describe('database initialization', () => {
     service.onModuleInit();
     service.onModuleInit();
     expect(service.connection.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get())
-      .toEqual({ count: 4 });
+      .toEqual({ count: 7 });
   });
 
   it('enforces foreign keys and keeps pragmas after reopening the file', () => {
@@ -56,6 +57,15 @@ describe('database initialization', () => {
     expect(second.connection.pragma('foreign_keys', { simple: true })).toBe(1);
     expect(second.connection.pragma('busy_timeout', { simple: true })).toBe(5000);
     expect(second.connection.pragma('synchronous', { simple: true })).toBe(2);
+  });
+
+  it('rejects unknown checkout operation states at the database boundary', () => {
+    const service = new DatabaseService(':memory:');
+    service.onModuleInit();
+    expect(() => service.connection.prepare(`INSERT INTO checkout_operations
+      (id, actor_id, operation_type, client_idempotency_key, request_hash, request_json, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run('op-1', 'session-1', 'checkout_intake', 'key-1', 'hash', '{}', 'unknown', new Date().toISOString(), new Date().toISOString())).toThrow();
+    service.onModuleDestroy();
   });
 });
 

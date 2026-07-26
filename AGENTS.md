@@ -33,7 +33,7 @@
 - Wallet ledger functionality.
 - KYC.
 - Settlement and reconciliation workflows.
-- Frontend implementation.
+- Production frontend features beyond the approved mock vertical flow.
 - Business rules not present in the final assignment brief or CSV schema.
 
 ## Transaction and idempotency rules

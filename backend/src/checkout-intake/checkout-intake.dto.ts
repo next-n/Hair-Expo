@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsInt, IsOptional, IsString, IsUUID, Length, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsOptional, IsString, IsUUID, Length, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { CHECKOUT_LIMITS } from './request-limits';
 
 export class CheckoutIntakeItemDto {
   @IsUUID()
@@ -11,20 +12,24 @@ export class CheckoutIntakeItemDto {
 
   @IsInt()
   @Min(1)
+  @Max(CHECKOUT_LIMITS.maxQuantity)
   quantity!: number;
 
   @IsOptional()
   @IsInt()
   @Min(0)
+  @Max(CHECKOUT_LIMITS.maxWeightGrams)
   weightGrams?: number;
 
   @IsOptional()
   @IsString()
+  @MaxLength(CHECKOUT_LIMITS.maxColorLength)
   color?: string;
 
   @IsOptional()
   @IsInt()
   @Min(0)
+  @Max(CHECKOUT_LIMITS.maxLengthInches)
   lengthInches?: number;
 }
 
@@ -34,6 +39,8 @@ export class CheckoutIntakeRequestDto {
   currency!: string;
 
   @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(CHECKOUT_LIMITS.maxItems)
   @ValidateNested({ each: true })
   @Type(() => CheckoutIntakeItemDto)
   items!: CheckoutIntakeItemDto[];

@@ -1,8 +1,9 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { DatabaseService } from '../database/database.service';
 import { buildCanonicalCheckoutRequest, canonicalJson, checkoutRequestHash } from './canonical-request';
 import { CheckoutIntakeRequestDto } from './checkout-intake.dto';
+import { CHECKOUT_LIMITS } from './request-limits';
 
 const OPERATION_TYPE = 'checkout_intake';
 
@@ -30,6 +31,13 @@ export class CheckoutIntakeService {
   constructor(private readonly database: DatabaseService) {}
 
   intake(actorId: string, idempotencyKey: string, request: CheckoutIntakeRequestDto): CheckoutIntakeResult {
+    if (request.items.length < 1 || request.items.length > CHECKOUT_LIMITS.maxItems) throw new BadRequestException('Checkout must contain between 1 and 100 items');
+    for (const item of request.items) {
+      if (item.quantity < 1 || item.quantity > CHECKOUT_LIMITS.maxQuantity) throw new BadRequestException('Quantity is outside the allowed range');
+      if (item.weightGrams !== undefined && (item.weightGrams < 0 || item.weightGrams > CHECKOUT_LIMITS.maxWeightGrams)) throw new BadRequestException('Weight is outside the allowed range');
+      if (item.lengthInches !== undefined && (item.lengthInches < 0 || item.lengthInches > CHECKOUT_LIMITS.maxLengthInches)) throw new BadRequestException('Length is outside the allowed range');
+      if (item.color !== undefined && item.color.length > CHECKOUT_LIMITS.maxColorLength) throw new BadRequestException('Color is too long');
+    }
     const canonicalRequest = buildCanonicalCheckoutRequest(request);
     const requestJson = canonicalJson(canonicalRequest);
     const requestHash = checkoutRequestHash(requestJson);

@@ -44,6 +44,8 @@ npm run dev
 
 The frontend uses `NEXT_PUBLIC_BACKEND_URL` and does not contain authoritative pricing logic.
 
+Checkout intake is scoped to a server-issued HTTP-only booth-session cookie; the client cannot choose an actor identity. Intake rejects empty carts and applies operational request bounds. The mock catalog is seeded into SQLite by migration and read through `CatalogService`, so the API does not use a separate in-memory catalog.
+
 The default database is `./data/hair-expo.sqlite`. The application creates its parent directory, enables SQLite WAL mode, foreign keys, `busy_timeout=5000`, and `synchronous=FULL`, then applies pending migrations on startup.
 
 Set `DATABASE_PATH` to use another SQLite file. Tests use temporary databases and do not modify the development database.
@@ -58,6 +60,10 @@ Set `DATABASE_PATH` to use another SQLite file. Tests use temporary databases an
 - `GET /checkout/:operationId` — operation status/retry lookup
 
 The frontend persists its draft cart in local storage, reuses one idempotency key for one checkout intention, submits all previews and totals to the backend, and renders the stable fake checkout URL as a QR code. Starting a new order clears the cart and creates a new intent key.
+
+## CI
+
+GitHub Actions runs install, type-check, lint, tests, and production builds for both `backend/` and `frontend/` on pushes to `main` and pull requests.
 
 ## Pricing architecture
 

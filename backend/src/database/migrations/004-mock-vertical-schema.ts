@@ -4,6 +4,11 @@ import { Migration } from './migration-runner';
 export const mockVerticalSchemaMigration: Migration = {
   id: '004-mock-vertical-schema',
   up: (db: Database.Database) => db.exec(`
+    CREATE TABLE booth_sessions (
+      id TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL
+    );
     CREATE TABLE product_variants (
       id TEXT PRIMARY KEY,
       product_id TEXT NOT NULL REFERENCES products(id),

@@ -37,6 +37,11 @@ describe('CheckoutIntakeService', () => {
       .toEqual({ count: 1 });
   });
 
+  it('rejects empty orders and operationally excessive quantities', () => {
+    expect(() => service.intake('actor-1', randomUUID(), { currency: 'USD', items: [] })).toThrow('between 1 and 100 items');
+    expect(() => service.intake('actor-1', randomUUID(), { currency: 'USD', items: [{ productId: randomUUID(), quantity: 101 }] })).toThrow('outside the allowed range');
+  });
+
   it('rejects the same key when the canonical request hash differs', () => {
     const key = randomUUID();
     service.intake('actor-1', key, request());
