@@ -35,3 +35,11 @@ test('supported locales include Burmese', async () => {
   assert.match(i18n, /errorQuantityLimit/);
   assert.match(i18n, /outside the allowed range/);
 });
+
+test('invoice includes the backend pricing breakdown', async () => {
+  const invoice = await readFile(new URL('../lib/invoice.ts', import.meta.url), 'utf8');
+  assert.match(invoice, /selectedDiscountReason/);
+  assert.match(invoice, /discountMinor/);
+  assert.match(invoice, /invoiceSurcharge/);
+  assert.match(invoice, /cnyReference/);
+});
