@@ -30,10 +30,20 @@ export class PricingService {
     }
     const input = {
       currency: draft.currency.toUpperCase(),
-      items: draft.items.map((item) => ({
-        ...item,
-        baseUnitPriceMinor: item.baseUnitPriceMinor ?? this.priceSource.getBaseUnitPriceMinor(item),
-      })),
+      expoDiscountEnabled: draft.expoDiscountEnabled,
+      items: draft.items.map((item) => {
+        const catalog = item.baseUnitPriceMinor === undefined && this.priceSource.getBasePrice ? this.priceSource.getBasePrice(item) : undefined;
+        return {
+          ...item,
+          baseUnitPriceMinor: item.baseUnitPriceMinor ?? catalog?.usdMinor ?? this.priceSource.getBaseUnitPriceMinor(item),
+          baseUnitPriceCnyMinor: item.baseUnitPriceCnyMinor ?? catalog?.cnyMinor,
+          sku: item.sku ?? catalog?.sku,
+          line: item.line ?? catalog?.line,
+          productType: item.productType ?? catalog?.productType,
+          unit: item.unit ?? catalog?.unit,
+          packWeightGrams: item.packWeightGrams ?? catalog?.packWeightGrams ?? undefined,
+        };
+      }),
     };
     return freeze(this.engine.calculate(input));
   }

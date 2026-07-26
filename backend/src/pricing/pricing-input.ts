@@ -1,4 +1,4 @@
-import { PricingItemInput } from './pricing-rule';
+import { PricingItemInput, PricingResult } from './pricing-rule';
 
 export interface NormalizedOrderDraftItem extends Omit<PricingItemInput, 'baseUnitPriceMinor'> {
   readonly baseUnitPriceMinor?: number;
@@ -7,13 +7,7 @@ export interface NormalizedOrderDraftItem extends Omit<PricingItemInput, 'baseUn
 export interface NormalizedOrderDraft {
   readonly currency: string;
   readonly items: readonly NormalizedOrderDraftItem[];
+  readonly expoDiscountEnabled?: boolean;
 }
 
-export interface PriceSnapshot {
-  readonly currency: string;
-  readonly lines: readonly import('./pricing-rule').PricingLine[];
-  readonly subtotalMinor: number;
-  readonly adjustments: readonly import('./pricing-rule').PricingAdjustment[];
-  readonly totalMinor: number;
-  readonly ruleVersion: string;
-}
+export type PriceSnapshot = PricingResult;

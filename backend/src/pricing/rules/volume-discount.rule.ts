@@ -1,4 +1,5 @@
 import { PricingAdjustment, PricingContext, PricingRule } from '../pricing-rule';
+import { percentageAmountMinor } from '../pricing-math';
 
 export interface VolumeDiscountConfig { readonly enabled?: boolean; readonly version?: string; }
 
@@ -6,6 +7,7 @@ export class VolumeDiscountRule implements PricingRule {
   readonly code = 'VOLUME_DISCOUNT';
   readonly version: string;
   readonly scope = 'ORDER' as const;
+  readonly priority = 10;
   private readonly enabled: boolean;
 
   constructor(config: VolumeDiscountConfig = {}) {
@@ -13,8 +15,18 @@ export class VolumeDiscountRule implements PricingRule {
     this.version = config.version ?? 'placeholder-v1';
   }
 
-  apply(_context: PricingContext): PricingAdjustment[] {
+  apply(context: PricingContext): PricingAdjustment[] {
     if (!this.enabled) return [];
-    return []; // Business rule intentionally deferred.
+    if (context.orderDiscountCode !== this.code || context.totalWeightGrams < 10_000) return [];
+    return [{
+      code: this.code,
+      label: 'Volume discount (10%)',
+      type: 'DISCOUNT',
+      scope: 'ORDER',
+      amountMinor: percentageAmountMinor(context.subtotalMinor, 1000, 'HALF_UP'),
+      amountCnyMinor: percentageAmountMinor(context.subtotalCnyMinor, 1000, 'HALF_UP'),
+      ruleVersion: this.version,
+      metadata: { basisPoints: 1000, reason: this.code, thresholdGrams: 10_000 },
+    }];
   }
 }

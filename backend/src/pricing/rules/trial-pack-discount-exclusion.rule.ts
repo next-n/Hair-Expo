@@ -15,6 +15,8 @@ export class TrialPackDiscountExclusionRule implements PricingRule {
 
   apply(_context: PricingContext): PricingAdjustment[] {
     if (!this.enabled) return [];
-    return []; // Business rule intentionally deferred.
+    // The final assignment currently includes Trial Pack in the eligible subtotal.
+    // Keeping this rule as a no-op makes a future exclusion a configuration change.
+    return [];
   }
 }
