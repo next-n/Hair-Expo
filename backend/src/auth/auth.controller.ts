@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Res, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Post, Res, UnauthorizedException } from '@nestjs/common';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
 
@@ -14,5 +14,8 @@ export class AuthController {
   }
 
   @Get('session')
-  session() { return { required: Boolean(process.env.APP_PASSCODE), status: 'ready' }; }
+  session(@Headers('cookie') cookieHeader: string | undefined) {
+    const required = Boolean(process.env.APP_PASSCODE);
+    return { required, authorized: !required || this.auth.isAuthorized(cookieHeader), status: 'ready' };
+  }
 }

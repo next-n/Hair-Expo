@@ -5,4 +5,22 @@ import { readFile } from 'node:fs/promises';
 test('frontend application entrypoint exists', async () => {
   const page = await readFile(new URL('../app/page.tsx', import.meta.url), 'utf8');
   assert.match(page, /export default function HomePage/);
+  assert.match(page, /setInterval/);
+  assert.match(page, /Paid — Start new order/);
+  assert.match(page, /CHECKOUT_KEY/);
+});
+
+test('order status route exists', async () => {
+  const page = await readFile(new URL('../app/orders/[orderId]/page.tsx', import.meta.url), 'utf8');
+  assert.match(page, /export default function OrderPage/);
+  assert.match(page, /setInterval/);
+});
+
+test('orders list route exists', async () => {
+  const page = await readFile(new URL('../app/orders/page.tsx', import.meta.url), 'utf8');
+  assert.match(page, /export default function OrdersPage/);
+  assert.match(page, /Print \/ PDF/);
+  assert.match(page, /href="\/"/);
+  assert.match(page, /COMPANY_DETAILS/);
+  assert.match(page, /company-link/);
 });

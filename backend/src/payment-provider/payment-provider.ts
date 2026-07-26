@@ -27,6 +27,7 @@ export interface PaymentProvider {
   readonly name: string;
   createCheckout(input: CreateCheckoutInput): Promise<CheckoutResult>;
   retrieveCheckout(reference: string): Promise<CheckoutResult>;
+  deactivateCheckout(reference: string): Promise<void>;
 }
 
 export const PAYMENT_PROVIDER = Symbol('PAYMENT_PROVIDER');

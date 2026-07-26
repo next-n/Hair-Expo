@@ -6,6 +6,8 @@ button { cursor: pointer; }
 .shell { max-width: 1280px; margin: 0 auto; padding: 24px; }
 .topbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 24px; }
 .brand { margin: 0; font-size: clamp(24px, 4vw, 36px); }
+.company-link { color: inherit; text-decoration: none; }
+.company-link:hover { text-decoration: underline; }
 .status { color: var(--muted); font-size: 14px; }
 .top-actions, .stepper { display: flex; align-items: center; gap: 8px; }
 .online, .paid { color: #027a48; font-size: 14px; }

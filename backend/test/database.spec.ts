@@ -36,7 +36,7 @@ describe('database initialization', () => {
     service.onModuleInit();
     service.onModuleInit();
     expect(service.connection.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get())
-      .toEqual({ count: 9 });
+      .toEqual({ count: 10 });
   });
 
   it('enforces foreign keys and keeps pragmas after reopening the file', () => {
@@ -83,6 +83,20 @@ describe('migration schema constraints', () => {
       (id, provider_name, provider_event_id, event_type, payload_json, processed_at)
       VALUES (?, ?, ?, ?, ?, ?)`).run('event-2', 'fake', 'provider-event-1', 'test', '{}', new Date().toISOString()))
       .toThrow();
+    service.onModuleDestroy();
+  });
+
+  it('enforces unique Stripe payment identities', () => {
+    const service = new DatabaseService(':memory:');
+    service.onModuleInit();
+    const now = new Date().toISOString();
+    const insert = service.connection.prepare(`INSERT INTO orders
+      (id, order_number, status, currency, total_amount_minor, created_at, updated_at)
+      VALUES (?, ?, 'pending', 'USD', 100, ?, ?)`);
+    insert.run('order-stripe-a', 'EXPO-A', now, now);
+    insert.run('order-stripe-b', 'EXPO-B', now, now);
+    service.connection.prepare('UPDATE orders SET stripe_checkout_session_id = ? WHERE id = ?').run('cs_test_unique', 'order-stripe-a');
+    expect(() => service.connection.prepare('UPDATE orders SET stripe_checkout_session_id = ? WHERE id = ?').run('cs_test_unique', 'order-stripe-b')).toThrow();
     service.onModuleDestroy();
   });
 });

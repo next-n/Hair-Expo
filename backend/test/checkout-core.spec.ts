@@ -53,6 +53,18 @@ describe('first vertical checkout flow', () => {
     expect(paymentProvider.callCount).toBe(1);
   });
 
+  it('returns the persisted paid status when a completed operation is retried', async () => {
+    const operation = createOperation();
+    const first = await core.process(operation.id);
+    database.connection.prepare("UPDATE orders SET status = 'paid' WHERE id = ?").run(first.orderId);
+
+    const retry = await core.process(operation.id);
+
+    expect(retry.checkoutUrl).toBe(first.checkoutUrl);
+    expect(retry.paymentStatus).toBe('paid');
+    expect(paymentProvider.callCount).toBe(1);
+  });
+
   it('allows only one concurrent processor to claim an operation', async () => {
     const operation = createOperation();
     const results = await Promise.allSettled([
@@ -63,6 +75,45 @@ describe('first vertical checkout flow', () => {
     expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
     const rejection = results.find((result) => result.status === 'rejected');
     expect(rejection).toEqual(expect.objectContaining({ reason: expect.objectContaining({ response: expect.objectContaining({ statusCode: 409 }) }) }));
+    expect(paymentProvider.callCount).toBe(1);
+  });
+
+  it('reclaims an operation whose processing lease has expired', async () => {
+    const operation = createOperation();
+    const expired = new Date(Date.now() - 1_000).toISOString();
+    database.connection.prepare(`UPDATE checkout_operations
+      SET status = 'processing', processing_started_at = ?, processing_lease_until = ?
+      WHERE id = ?`).run(expired, expired, operation.id);
+
+    const result = await core.process(operation.id);
+
+    expect(result.status).toBe('completed');
+    expect(paymentProvider.callCount).toBe(1);
+  });
+
+  it('does not reclaim an operation with an active processing lease', async () => {
+    const operation = createOperation();
+    const active = new Date(Date.now() + 60_000).toISOString();
+    database.connection.prepare(`UPDATE checkout_operations
+      SET status = 'processing', processing_started_at = ?, processing_lease_until = ?
+      WHERE id = ?`).run(new Date().toISOString(), active, operation.id);
+
+    await expect(core.process(operation.id)).rejects.toMatchObject({
+      response: expect.objectContaining({ statusCode: 409 }),
+    });
+    expect(paymentProvider.callCount).toBe(0);
+  });
+
+  it('also recovers a stale payment-pending operation after a crash window', async () => {
+    const operation = createOperation();
+    const expired = new Date(Date.now() - 1_000).toISOString();
+    database.connection.prepare(`UPDATE checkout_operations
+      SET status = 'payment_pending', processing_started_at = ?, processing_lease_until = ?
+      WHERE id = ?`).run(expired, expired, operation.id);
+
+    const result = await core.process(operation.id);
+
+    expect(result.status).toBe('completed');
     expect(paymentProvider.callCount).toBe(1);
   });
 });

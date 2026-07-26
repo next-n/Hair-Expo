@@ -4,6 +4,8 @@ import { DatabaseService } from '../database/database.service';
 import { CheckoutResult as ProviderCheckoutResult, PAYMENT_PROVIDER, PaymentProvider } from '../payment-provider/payment-provider';
 import { PricingService } from '../pricing/pricing.service';
 
+const PROCESSING_LEASE_MS = 2 * 60 * 1000;
+
 type CheckoutOperationRow = {
   id: string;
   client_idempotency_key: string;
@@ -15,9 +17,13 @@ type CheckoutOperationRow = {
   total_amount_minor: number | null;
   currency: string | null;
   pricing_rule_version: string | null;
+  processing_started_at: string | null;
+  processing_lease_until: string | null;
   created_at: string;
   updated_at: string;
 };
+
+type ClaimResult = { operation: CheckoutOperationRow; claimed: boolean };
 
 export type CheckoutResult = {
   operationId: string;
@@ -50,8 +56,10 @@ export class CheckoutCoreService {
   ) {}
 
   async process(operationId: string): Promise<CheckoutResult> {
-    const claimed = this.claim(operationId);
+    const claim = this.claim(operationId);
+    const claimed = claim.operation;
     if (claimed.status === 'completed') return this.toResult(claimed);
+    if (!claim.claimed) throw new ConflictException(`Checkout operation is already ${claimed.status}`);
     if (claimed.status !== 'processing') throw new ConflictException(`Checkout operation is already ${claimed.status}`);
     const request = JSON.parse(claimed.request_json) as CheckoutRequest;
     const pricing = this.pricingService.calculate({
@@ -135,10 +143,20 @@ export class CheckoutCoreService {
     return this.saveProviderResult(operationId, attemptId, providerResult, pricing.totalMinor, pricing.totalCnyMinor, request.currency, orderId, orderNumber, pricing.selectedDiscountReason);
   }
 
-  private claim(operationId: string): CheckoutOperationRow {
+  private claim(operationId: string): ClaimResult {
     const result = this.database.connection.transaction(() => {
-      this.database.connection.prepare(`UPDATE checkout_operations SET status = 'processing', updated_at = ? WHERE id = ? AND status IN ('received', 'review_required')`).run(new Date().toISOString(), operationId);
-      return this.database.connection.prepare(`SELECT id, client_idempotency_key, request_hash, request_json, status, order_id, response_json, total_amount_minor, currency, pricing_rule_version, created_at, updated_at FROM checkout_operations WHERE id = ?`).get(operationId) as CheckoutOperationRow | undefined;
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const leaseUntil = new Date(now.getTime() + PROCESSING_LEASE_MS).toISOString();
+      const updated = this.database.connection.prepare(`
+        UPDATE checkout_operations
+        SET status = 'processing', processing_started_at = ?, processing_lease_until = ?, updated_at = ?
+        WHERE id = ?
+          AND (status IN ('received', 'review_required')
+            OR (status IN ('processing', 'payment_pending') AND processing_lease_until IS NOT NULL AND processing_lease_until <= ?))
+      `).run(nowIso, leaseUntil, nowIso, operationId, nowIso);
+      const operation = this.database.connection.prepare(`SELECT id, client_idempotency_key, request_hash, request_json, status, order_id, response_json, total_amount_minor, currency, pricing_rule_version, processing_started_at, processing_lease_until, created_at, updated_at FROM checkout_operations WHERE id = ?`).get(operationId) as CheckoutOperationRow | undefined;
+      return operation ? { operation, claimed: updated.changes === 1 } : undefined;
     })();
     if (!result) throw new NotFoundException('Checkout operation not found');
     return result;
@@ -149,9 +167,12 @@ export class CheckoutCoreService {
     const now = new Date().toISOString();
     return this.database.connection.transaction(() => {
       const response = { checkoutUrl: result.checkoutUrl ?? null, providerReference: result.providerReference ?? null, orderId, orderNumber, totalCnyMinor, selectedDiscountReason, providerProductId: result.providerProductId ?? null, providerPriceId: result.providerPriceId ?? null, paymentLinkId: result.paymentLinkId ?? null };
-      this.database.connection.prepare(`UPDATE checkout_operations SET status = 'completed', response_json = ?, updated_at = ? WHERE id = ? AND status = 'payment_pending'`).run(JSON.stringify(response), now, operationId);
-      this.database.connection.prepare(`UPDATE orders SET status = 'pending', stripe_product_id = ?, stripe_price_id = ?, stripe_payment_link_id = ?, updated_at = ? WHERE id = ?`).run(result.providerProductId ?? null, result.providerPriceId ?? null, result.paymentLinkId ?? result.providerReference ?? null, now, orderId);
-      this.database.connection.prepare(`UPDATE checkout_attempts SET status = 'completed', provider_reference = ?, checkout_url = ?, stripe_product_id = ?, stripe_price_id = ?, stripe_payment_link_id = ?, stripe_checkout_session_id = ?, stripe_payment_intent_id = ?, updated_at = ? WHERE id = ?`).run(result.providerReference ?? null, result.checkoutUrl ?? null, result.providerProductId ?? null, result.providerPriceId ?? null, result.paymentLinkId ?? null, result.checkoutSessionId ?? null, result.paymentIntentId ?? null, now, attemptId);
+      const operationUpdated = this.database.connection.prepare(`UPDATE checkout_operations SET status = 'completed', response_json = ?, processing_started_at = NULL, processing_lease_until = NULL, updated_at = ? WHERE id = ? AND status = 'payment_pending'`).run(JSON.stringify(response), now, operationId);
+      if (operationUpdated.changes !== 1) throw new ConflictException('Checkout operation state changed before provider result was saved');
+      const orderUpdated = this.database.connection.prepare(`UPDATE orders SET status = CASE WHEN status = 'paid' THEN 'paid' ELSE 'pending' END, stripe_product_id = ?, stripe_price_id = ?, stripe_payment_link_id = ?, updated_at = ? WHERE id = ? AND status IN ('pending', 'review_required', 'paid')`).run(result.providerProductId ?? null, result.providerPriceId ?? null, result.paymentLinkId ?? result.providerReference ?? null, now, orderId);
+      if (orderUpdated.changes !== 1) throw new ConflictException('Order state changed before provider result was saved');
+      const attemptUpdated = this.database.connection.prepare(`UPDATE checkout_attempts SET status = 'completed', provider_reference = ?, checkout_url = ?, stripe_product_id = ?, stripe_price_id = ?, stripe_payment_link_id = ?, stripe_checkout_session_id = ?, stripe_payment_intent_id = ?, updated_at = ? WHERE id = ? AND status = 'pending'`).run(result.providerReference ?? null, result.checkoutUrl ?? null, result.providerProductId ?? null, result.providerPriceId ?? null, result.paymentLinkId ?? null, result.checkoutSessionId ?? null, result.paymentIntentId ?? null, now, attemptId);
+      if (attemptUpdated.changes !== 1) throw new ConflictException('Checkout attempt state changed before provider result was saved');
       return { operationId, orderId, orderNumber, status: 'completed', paymentStatus: 'pending', totalAmountMinor, totalCnyMinor, currency, checkoutUrl: result.checkoutUrl ?? null, providerReference: result.providerReference ?? null, selectedDiscountReason };
     })();
   }
@@ -160,20 +181,37 @@ export class CheckoutCoreService {
     const safeMessage = error instanceof Error && error.message.startsWith('FAKE_') ? error.message : 'Payment provider request did not complete; retry is safe';
     const now = new Date().toISOString();
     return this.database.connection.transaction(() => {
-      this.database.connection.prepare(`UPDATE checkout_operations SET status = 'review_required', updated_at = ? WHERE id = ? AND status = 'payment_pending'`).run(now, operationId);
-      this.database.connection.prepare(`UPDATE checkout_attempts SET status = 'review_required', error_code = 'PROVIDER_UNCERTAIN', error_message = ?, updated_at = ? WHERE id = ?`).run(safeMessage, now, attemptId);
-      this.database.connection.prepare(`UPDATE orders SET status = 'review_required', updated_at = ? WHERE id = ?`).run(now, orderId);
+      const operationUpdated = this.database.connection.prepare(`UPDATE checkout_operations SET status = 'review_required', processing_started_at = NULL, processing_lease_until = NULL, updated_at = ? WHERE id = ? AND status = 'payment_pending'`).run(now, operationId);
+      if (operationUpdated.changes !== 1) throw new ConflictException('Checkout operation state changed before provider failure was saved');
+      const attemptUpdated = this.database.connection.prepare(`UPDATE checkout_attempts SET status = 'review_required', error_code = 'PROVIDER_UNCERTAIN', error_message = ?, updated_at = ? WHERE id = ? AND status = 'pending'`).run(safeMessage, now, attemptId);
+      if (attemptUpdated.changes !== 1) throw new ConflictException('Checkout attempt state changed before provider failure was saved');
+      this.database.connection.prepare(`UPDATE orders SET status = 'review_required', updated_at = ? WHERE id = ? AND status IN ('pending', 'review_required')`).run(now, orderId);
       return { operationId, orderId, status: 'review_required', paymentStatus: 'review_required', totalAmountMinor: null, totalCnyMinor: null, currency: null, checkoutUrl: null };
     })();
   }
 
   private toResult(operation: CheckoutOperationRow): CheckoutResult {
     const response = operation.response_json ? JSON.parse(operation.response_json) as Partial<CheckoutResult> : {};
-    return { operationId: operation.id, orderId: operation.order_id ?? response.orderId, orderNumber: response.orderNumber, status: operation.status, paymentStatus: response.paymentStatus ?? (operation.status === 'completed' ? 'pending' : operation.status), totalAmountMinor: operation.total_amount_minor, totalCnyMinor: response.totalCnyMinor ?? null, currency: operation.currency, checkoutUrl: response.checkoutUrl ?? null, providerReference: response.providerReference ?? null, selectedDiscountReason: response.selectedDiscountReason ?? null };
+    const order = operation.order_id
+      ? this.database.connection.prepare('SELECT status, order_number AS orderNumber FROM orders WHERE id = ?').get(operation.order_id) as { status: string; orderNumber: string } | undefined
+      : undefined;
+    return {
+      operationId: operation.id,
+      orderId: operation.order_id ?? response.orderId,
+      orderNumber: order?.orderNumber ?? response.orderNumber,
+      status: operation.status,
+      paymentStatus: order?.status ?? response.paymentStatus ?? (operation.status === 'completed' ? 'pending' : operation.status),
+      totalAmountMinor: operation.total_amount_minor,
+      totalCnyMinor: response.totalCnyMinor ?? null,
+      currency: operation.currency,
+      checkoutUrl: response.checkoutUrl ?? null,
+      providerReference: response.providerReference ?? null,
+      selectedDiscountReason: response.selectedDiscountReason ?? null,
+    };
   }
 
   get(operationId: string): CheckoutResult {
-    const operation = this.database.connection.prepare(`SELECT id, client_idempotency_key, request_hash, request_json, status, order_id, response_json, total_amount_minor, currency, pricing_rule_version, created_at, updated_at FROM checkout_operations WHERE id = ?`).get(operationId) as CheckoutOperationRow | undefined;
+    const operation = this.database.connection.prepare(`SELECT id, client_idempotency_key, request_hash, request_json, status, order_id, response_json, total_amount_minor, currency, pricing_rule_version, processing_started_at, processing_lease_until, created_at, updated_at FROM checkout_operations WHERE id = ?`).get(operationId) as CheckoutOperationRow | undefined;
     if (!operation) throw new NotFoundException('Checkout operation not found');
     return this.toResult(operation);
   }

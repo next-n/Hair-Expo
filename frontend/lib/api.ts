@@ -1,6 +1,6 @@
 import { CartItem, CheckoutResponse, Order, PricePreview, Product } from './types';
 
-const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3000';
+const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:4423';
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${base}${path}`, { ...init, credentials: 'include', headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) } });
   if (!response.ok) throw new Error((await response.json().catch(() => null))?.message ?? `Request failed (${response.status})`);
@@ -8,7 +8,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 export const api = {
   session: () => request<{ status: string }>('/checkout-intake/session'),
-  authSession: () => request<{ required: boolean }>('/auth/session'),
+  authSession: () => request<{ required: boolean; authorized: boolean }>('/auth/session'),
   unlock: (passcode: string) => request<{ status: string }>('/auth/unlock', { method: 'POST', body: JSON.stringify({ passcode }) }),
   products: (query = '') => request<Product[]>(`/catalog/products${query ? `?search=${encodeURIComponent(query)}` : ''}`),
   preview: (currency: string, items: CartItem[], expoDiscountEnabled: boolean) => request<PricePreview>('/orders/preview', { method: 'POST', body: JSON.stringify({ currency, items: items.map(({ sku: _sku, ...item }) => item), expoDiscountEnabled }) }),

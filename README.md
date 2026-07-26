@@ -41,17 +41,19 @@ npm run dev
 
 The backend defaults to `./data/hair-expo.sqlite`. It creates the directory, enables WAL mode, foreign keys, `busy_timeout=5000`, and `synchronous=FULL`, then applies migrations. Back up the SQLite database together with its WAL state after stopping the app; do not copy a live database while it is being written.
 
+Deployment requirement: run one backend instance with a persistent disk for `DATABASE_PATH`. Do not deploy this SQLite writer on an ephemeral or horizontally scaled filesystem; a redeploy must preserve the database, `-wal`, and `-shm` files.
+
 ## Environment
 
 Backend `.env`:
 
 ```text
-PORT=3000
+PORT=4423
 DATABASE_PATH=./data/hair-expo.sqlite
 PAYMENT_PROVIDER=fake
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
-FRONTEND_URL=http://localhost:3001
+FRONTEND_URL=http://localhost:4421
 APP_PASSCODE=change-me
 CATALOG_CSV_PATH=./data/trunov_price_list.csv
 ```
@@ -61,8 +63,12 @@ Set `PAYMENT_PROVIDER=stripe` only with a Stripe test key. Startup rejects keys 
 Frontend `.env.local`:
 
 ```text
-NEXT_PUBLIC_BACKEND_URL=http://localhost:3000
+NEXT_PUBLIC_BACKEND_URL=http://localhost:4423
+NEXT_PUBLIC_INVOICE_COMPANY_NAME=TRUNOV HAIR
+NEXT_PUBLIC_INVOICE_COMPANY_DETAILS=Expo booth · Company details placeholder
 ```
+
+Invoice company details are public frontend configuration, not secrets. Change these values in `frontend/.env.local` and restart the frontend before printing new invoices. Booth staff do not edit company identity per order.
 
 ## Catalog import
 
@@ -100,6 +106,8 @@ trunov:payment-link:<checkoutOperationId>
 
 A provider timeout moves the operation to `review_required` without creating another local order. Retrying reuses the same order and provider keys. A duplicate successful request returns the existing Payment Link and QR source URL.
 
+Processing claims use a two-minute lease. If the backend stops after claiming an operation, a later retry can reclaim the expired lease; an active lease still rejects concurrent processing. The provider call remains outside the local transactions.
+
 ## Stripe test mode
 
 With a test key configured:
@@ -115,10 +123,12 @@ The adapter creates one order-specific Stripe Product, USD Price, and Payment Li
 Forward webhooks locally with Stripe CLI:
 
 ```bash
-stripe listen --forward-to localhost:3000/webhooks/stripe
+stripe listen --forward-to localhost:4423/webhooks/stripe
 ```
 
 Copy the CLI `whsec_...` value into `STRIPE_WEBHOOK_SECRET`. The raw body is preserved, signatures are verified, and only paid `checkout.session.completed` events can mark an order paid. Event IDs are unique; duplicate deliveries return HTTP 200 without applying a second effect. The orders screen also exposes a manual refresh fallback.
+
+After the first valid paid event, the backend deactivates the associated Payment Link outside the database transaction and records the deactivation locally. If deactivation fails, the webhook is rejected so Stripe can retry it. Stripe checkout-session, payment-intent, and payment-link identifiers are unique in the local database, and paid transitions are conditional.
 
 ## API
 

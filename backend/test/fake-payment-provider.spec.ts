@@ -45,6 +45,7 @@ describe('fake payment provider boundary', () => {
         return { status: 'created', providerReference: request.providerIdempotencyKey, checkoutUrl: 'https://fake-payments.invalid/probe' };
       },
       async retrieveCheckout(): Promise<CheckoutResult> { return { status: 'failed' }; },
+      async deactivateCheckout(): Promise<void> {},
     };
     const core = new CheckoutCoreService(database, new PricingService(new DefaultPricingEngine(), new MockPriceSource()), provider);
     await expect(core.process(operation.id)).resolves.toMatchObject({ status: 'completed' });

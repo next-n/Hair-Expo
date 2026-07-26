@@ -8,6 +8,7 @@ export type FakeProviderMode = 'success' | 'timeout' | 'failure';
 export class FakePaymentProvider implements PaymentProvider {
   readonly name = 'fake';
   callCount = 0;
+  deactivationCount = 0;
   private readonly results = new Map<string, CheckoutResult>();
 
   constructor(private readonly mode: FakeProviderMode = 'success') {}
@@ -34,5 +35,9 @@ export class FakePaymentProvider implements PaymentProvider {
       if (result.providerReference === reference) return result;
     }
     return { status: 'failed', errorCode: 'NOT_FOUND', errorMessage: 'Fake checkout not found' };
+  }
+
+  async deactivateCheckout(_reference: string): Promise<void> {
+    this.deactivationCount += 1;
   }
 }

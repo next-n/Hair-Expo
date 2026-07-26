@@ -1,13 +1,14 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import Stripe from 'stripe';
 import { DatabaseService } from '../database/database.service';
 import { AuditService } from '../audit/audit.service';
+import { PAYMENT_PROVIDER, PaymentProvider } from '../payment-provider/payment-provider';
 
 @Injectable()
 export class StripeWebhookService {
-  constructor(private readonly database: DatabaseService, private readonly audit: AuditService) {}
+  constructor(private readonly database: DatabaseService, private readonly audit: AuditService, @Inject(PAYMENT_PROVIDER) private readonly paymentProvider: PaymentProvider) {}
 
-  handle(rawBody: Buffer, signature: string | undefined) {
+  async handle(rawBody: Buffer, signature: string | undefined) {
     const secret = process.env.STRIPE_WEBHOOK_SECRET;
     if (!secret || !signature) throw new BadRequestException('Invalid Stripe webhook signature');
     let event: Stripe.Event;
@@ -26,22 +27,36 @@ export class StripeWebhookService {
     const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id ?? null;
     const paymentLinkId = typeof session.payment_link === 'string' ? session.payment_link : session.payment_link?.id ?? null;
     const now = new Date().toISOString();
-    const processed = this.database.connection.transaction(() => {
+    const outcome = this.database.connection.transaction(() => {
       const inserted = this.database.connection.prepare(`
         INSERT INTO processed_webhook_events (id, provider_name, provider_event_id, event_type, payload_json, processed_at, checkout_session_id, payment_intent_id, payment_link_id, payment_status)
         VALUES (?, 'stripe', ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(provider_name, provider_event_id) DO NOTHING
       `).run(event.id, event.id, event.type, JSON.stringify(event), now, session.id, paymentIntentId, paymentLinkId, session.payment_status);
-      if (inserted.changes === 0) return false;
-      const before = this.database.connection.prepare('SELECT status FROM orders WHERE id = ?').get(orderId) as { status: string } | undefined;
-      if (!before) return false;
-      if (before.status !== 'paid') {
-        this.database.connection.prepare(`UPDATE orders SET status = 'paid', stripe_checkout_session_id = COALESCE(?, stripe_checkout_session_id), stripe_payment_intent_id = COALESCE(?, stripe_payment_intent_id), stripe_payment_link_id = COALESCE(?, stripe_payment_link_id), updated_at = ? WHERE id = ? AND status IN ('pending', 'review_required')`).run(session.id, paymentIntentId, paymentLinkId, now, orderId);
-        this.audit.record({ action: 'ORDER_PAID', entityType: 'order', entityId: orderId, source: 'stripe_webhook', before, after: { status: 'paid' }, metadata: { checkoutSessionId: session.id, paymentIntentId, paymentLinkId } });
+      const order = this.database.connection.prepare('SELECT status, stripe_payment_link_id, stripe_payment_link_deactivated_at FROM orders WHERE id = ?').get(orderId) as { status: string; stripe_payment_link_id: string | null; stripe_payment_link_deactivated_at: string | null } | undefined;
+      if (!order) return { accepted: false, duplicate: inserted.changes === 0, orderId, paymentLinkId: paymentLinkId ?? null, needsDeactivation: false };
+      const linkToDeactivate = paymentLinkId ?? order.stripe_payment_link_id;
+      if (inserted.changes === 0) return { accepted: true, duplicate: true, orderId, paymentLinkId: linkToDeactivate, needsDeactivation: Boolean(linkToDeactivate && !order.stripe_payment_link_deactivated_at) };
+      if (order.status !== 'paid' && ['pending', 'review_required'].includes(order.status)) {
+        const updated = this.database.connection.prepare(`UPDATE orders SET status = 'paid', stripe_checkout_session_id = COALESCE(?, stripe_checkout_session_id), stripe_payment_intent_id = COALESCE(?, stripe_payment_intent_id), stripe_payment_link_id = COALESCE(?, stripe_payment_link_id), updated_at = ? WHERE id = ? AND status IN ('pending', 'review_required')`).run(session.id, paymentIntentId, paymentLinkId, now, orderId);
+        if (updated.changes !== 1) throw new Error('Order state changed while processing Stripe payment');
+        this.audit.record({ action: 'ORDER_PAID', entityType: 'order', entityId: orderId, source: 'stripe_webhook', before: order, after: { status: 'paid' }, metadata: { checkoutSessionId: session.id, paymentIntentId, paymentLinkId } });
       }
-      return true;
+      return { accepted: true, duplicate: false, orderId, paymentLinkId: linkToDeactivate, needsDeactivation: Boolean(linkToDeactivate && !order.stripe_payment_link_deactivated_at) };
     })();
-    if (!processed) return { received: true, duplicate: true };
-    return { received: true, processed: true };
+    if (!outcome.accepted) return { received: true, ignored: true };
+    if (outcome.needsDeactivation && outcome.paymentLinkId) {
+      try {
+        await this.paymentProvider.deactivateCheckout(outcome.paymentLinkId);
+      } catch (error) {
+        this.audit.record({ action: 'PAYMENT_LINK_DEACTIVATION_FAILED', entityType: 'order', entityId: outcome.orderId, source: 'stripe_webhook', metadata: { paymentLinkId: outcome.paymentLinkId, error: error instanceof Error ? error.message : 'unknown error' } });
+        throw new Error('Stripe payment link deactivation failed');
+      }
+      this.database.connection.transaction(() => {
+        this.database.connection.prepare('UPDATE orders SET stripe_payment_link_deactivated_at = ?, updated_at = ? WHERE id = ? AND stripe_payment_link_deactivated_at IS NULL').run(now, new Date().toISOString(), outcome.orderId);
+        this.audit.record({ action: 'PAYMENT_LINK_DEACTIVATED', entityType: 'order', entityId: outcome.orderId, source: 'stripe_webhook', metadata: { paymentLinkId: outcome.paymentLinkId } });
+      })();
+    }
+    return outcome.duplicate ? { received: true, duplicate: true } : { received: true, processed: true };
   }
 }

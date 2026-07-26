@@ -7,6 +7,7 @@ import { pricingVersionMigration } from './006-pricing-version';
 import { catalogFixturesMigration } from './007-catalog-fixtures';
 import { realCatalogSchemaMigration } from './008-real-catalog-schema';
 import { finalOrderSnapshotMigration } from './009-final-order-snapshot';
+import { paymentHardeningMigration } from './010-payment-hardening';
 
 // Add each new migration here in ascending order.
-export const migrations = [initialMigration, checkoutOperationScopeMigration, checkoutProcessingMigration, mockVerticalSchemaMigration, operationStatusConstraintMigration, pricingVersionMigration, catalogFixturesMigration, realCatalogSchemaMigration, finalOrderSnapshotMigration];
+export const migrations = [initialMigration, checkoutOperationScopeMigration, checkoutProcessingMigration, mockVerticalSchemaMigration, operationStatusConstraintMigration, pricingVersionMigration, catalogFixturesMigration, realCatalogSchemaMigration, finalOrderSnapshotMigration, paymentHardeningMigration];
