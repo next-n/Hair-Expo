@@ -4,6 +4,7 @@ import { CheckoutIntakeService } from '../src/checkout-intake/checkout-intake.se
 import { CheckoutIntakeRequestDto } from '../src/checkout-intake/checkout-intake.dto';
 import { DatabaseService } from '../src/database/database.service';
 import { FakePaymentProvider } from '../src/payment-provider/fake-payment-provider';
+import { CheckoutResult, PaymentProvider } from '../src/payment-provider/payment-provider';
 import { DefaultPricingEngine } from '../src/pricing/default-pricing-engine';
 import { MockPriceSource } from '../src/pricing/mock-price-source';
 import { PricingService } from '../src/pricing/pricing.service';
@@ -115,5 +116,57 @@ describe('first vertical checkout flow', () => {
 
     expect(result.status).toBe('completed');
     expect(paymentProvider.callCount).toBe(1);
+  });
+
+  it('renews the payment lease while the provider call is still running', async () => {
+    jest.useFakeTimers();
+    let resolveProvider!: (result: CheckoutResult) => void;
+    const blockingProvider: PaymentProvider = {
+      name: 'blocking',
+      createCheckout: () => new Promise<CheckoutResult>((resolve) => { resolveProvider = resolve; }),
+      retrieveCheckout: async () => ({ status: 'failed' }),
+      deactivateCheckout: async () => {},
+    };
+    const blockingCore = new CheckoutCoreService(database, new PricingService(new DefaultPricingEngine(), new MockPriceSource()), blockingProvider);
+    const operation = createOperation();
+
+    try {
+      const inFlight = blockingCore.process(operation.id);
+      const before = database.connection.prepare('SELECT processing_lease_until AS lease FROM checkout_operations WHERE id = ?').get(operation.id) as { lease: string | null };
+      jest.advanceTimersByTime(30_000);
+      const after = database.connection.prepare('SELECT processing_lease_until AS lease FROM checkout_operations WHERE id = ?').get(operation.id) as { lease: string | null };
+      expect(after.lease).not.toBe(before.lease);
+
+      resolveProvider({ status: 'created', providerReference: 'blocking-reference', checkoutUrl: 'https://fake-payments.invalid/blocking' });
+      await expect(inFlight).resolves.toMatchObject({ status: 'completed' });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('fences a late provider result from a request that lost its lease', async () => {
+    const resolvers: Array<(result: CheckoutResult) => void> = [];
+    const blockingProvider: PaymentProvider = {
+      name: 'blocking',
+      createCheckout: () => new Promise<CheckoutResult>((resolve) => { resolvers.push(resolve); }),
+      retrieveCheckout: async () => ({ status: 'failed' }),
+      deactivateCheckout: async () => {},
+    };
+    const blockingCore = new CheckoutCoreService(database, new PricingService(new DefaultPricingEngine(), new MockPriceSource()), blockingProvider);
+    const operation = createOperation();
+    const first = blockingCore.process(operation.id);
+    await Promise.resolve();
+    const firstLease = database.connection.prepare('SELECT processing_claim_token AS token FROM checkout_operations WHERE id = ?').get(operation.id) as { token: string };
+    database.connection.prepare(`UPDATE checkout_operations SET processing_lease_until = ? WHERE id = ?`).run(new Date(Date.now() - 1_000).toISOString(), operation.id);
+
+    const second = blockingCore.process(operation.id);
+    await Promise.resolve();
+    expect(resolvers).toHaveLength(2);
+    resolvers[0]({ status: 'created', providerReference: 'late-reference', checkoutUrl: 'https://fake-payments.invalid/late' });
+    await expect(first).rejects.toMatchObject({ response: expect.objectContaining({ statusCode: 409 }) });
+    expect(database.connection.prepare('SELECT processing_claim_token AS token FROM checkout_operations WHERE id = ?').get(operation.id)).not.toEqual(firstLease);
+
+    resolvers[1]({ status: 'created', providerReference: 'current-reference', checkoutUrl: 'https://fake-payments.invalid/current' });
+    await expect(second).resolves.toMatchObject({ status: 'completed', providerReference: 'current-reference' });
   });
 });

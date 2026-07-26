@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
 import { CatalogImportService } from '../src/catalog/catalog-import.service';
 import { CatalogService } from '../src/catalog/catalog.service';
 import { CheckoutCoreService } from '../src/checkout-core/checkout-core.service';
@@ -15,7 +16,7 @@ import { PricingService } from '../src/pricing/pricing.service';
 describe('real catalog to mock payment vertical flow', () => {
   it('imports, previews, intakes, creates one fake link, and persists snapshots', async () => {
     const database = new DatabaseService(':memory:'); database.onModuleInit();
-    new CatalogImportService(database).importFromFile(`${process.cwd()}\\data\\trunov_price_list.csv`);
+    new CatalogImportService(database).importFromFile(join(process.cwd(), 'data', 'trunov_price_list.csv'));
     const catalog = new CatalogService(database);
     const source = new CatalogPriceSource(catalog);
     const pricing = new PricingService(new DefaultPricingEngine([

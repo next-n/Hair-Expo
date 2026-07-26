@@ -106,7 +106,7 @@ trunov:payment-link:<checkoutOperationId>
 
 A provider timeout moves the operation to `review_required` without creating another local order. Retrying reuses the same order and provider keys. A duplicate successful request returns the existing Payment Link and QR source URL.
 
-Processing claims use a two-minute lease. If the backend stops after claiming an operation, a later retry can reclaim the expired lease; an active lease still rejects concurrent processing. The provider call remains outside the local transactions.
+Processing claims use a two-minute lease. Once the local transaction enters `payment_pending`, the checkout core renews that lease every 30 seconds while the provider request is running, so a live request is not reclaimed merely because the provider call is slow. If the process crashes, the lease eventually expires and a retry may resume with the same stable provider idempotency key. A lease token fences stale requests from saving a late success or failure over the current operation. The provider call remains outside local transactions.
 
 ## Stripe test mode
 
@@ -163,7 +163,7 @@ npm run lint
 npm run build
 ```
 
-The backend tests cover the 75-product import, exact assignment calculation, non-stacking discounts, missing Trial Pack fields, duplicate intake, concurrent processing, provider boundaries, migrations, and immutable deterministic pricing. Stripe tests should use mocked provider boundaries; a real test payment still requires the manual Stripe setup above.
+The backend tests cover the 75-product import, exact assignment calculation, non-stacking discounts, missing Trial Pack fields, duplicate intake, concurrent processing, lease recovery, provider boundaries, webhook deactivation, migrations, and immutable deterministic pricing. Stripe tests should use mocked provider boundaries; a real test payment still requires the manual Stripe setup above.
 
 ## AI Workflow Notes
 
@@ -194,4 +194,4 @@ The generated changes were verified by manually inspecting migrations, transacti
 - Trial Pack missing weight is explicitly assumed to be 0 g, and Trial Pack remains discount eligible, pending company clarification.
 - Deployment provider setup, DNS/HTTPS, and the final screen recording remain operational deliverables rather than repository changes.
 
-Inventory, refunds, roles, analytics, Kafka, Redis, microservices, and PDF invoices are intentionally not implemented.
+Inventory, refunds, roles, analytics, Kafka, Redis, microservices, and server-generated PDF files are intentionally not implemented. The frontend provides a printable invoice view that can be saved as PDF by the browser.

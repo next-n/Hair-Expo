@@ -5,6 +5,7 @@ import { CheckoutResult as ProviderCheckoutResult, PAYMENT_PROVIDER, PaymentProv
 import { PricingService } from '../pricing/pricing.service';
 
 const PROCESSING_LEASE_MS = 2 * 60 * 1000;
+const PROCESSING_LEASE_RENEWAL_MS = 30 * 1000;
 
 type CheckoutOperationRow = {
   id: string;
@@ -19,6 +20,7 @@ type CheckoutOperationRow = {
   pricing_rule_version: string | null;
   processing_started_at: string | null;
   processing_lease_until: string | null;
+  processing_claim_token: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -61,6 +63,8 @@ export class CheckoutCoreService {
     if (claimed.status === 'completed') return this.toResult(claimed);
     if (!claim.claimed) throw new ConflictException(`Checkout operation is already ${claimed.status}`);
     if (claimed.status !== 'processing') throw new ConflictException(`Checkout operation is already ${claimed.status}`);
+    if (!claimed.processing_claim_token) throw new ConflictException('Checkout operation has no processing claim token');
+    const leaseToken = claimed.processing_claim_token;
     const request = JSON.parse(claimed.request_json) as CheckoutRequest;
     const pricing = this.pricingService.calculate({
       currency: request.currency,
@@ -130,17 +134,22 @@ export class CheckoutCoreService {
       }
     })();
 
-    let providerResult: ProviderCheckoutResult;
+    const leaseRenewal = this.startLeaseRenewal(operationId, leaseToken);
     try {
-      providerResult = await this.paymentProvider.createCheckout({
-        paymentAttemptId: attemptId, providerIdempotencyKey, amountMinor: pricing.totalMinor, currency: request.currency,
-        orderId, orderNumber, operationId, frontendUrl: process.env.FRONTEND_URL,
-      });
-    } catch (error) {
-      return this.saveFailure(operationId, attemptId, orderId, error);
+      let providerResult: ProviderCheckoutResult;
+      try {
+        providerResult = await this.paymentProvider.createCheckout({
+          paymentAttemptId: attemptId, providerIdempotencyKey, amountMinor: pricing.totalMinor, currency: request.currency,
+          orderId, orderNumber, operationId, frontendUrl: process.env.FRONTEND_URL,
+        });
+      } catch (error) {
+        return this.saveFailure(operationId, attemptId, orderId, leaseToken, error);
+      }
+      if (providerResult.status !== 'created') return this.saveFailure(operationId, attemptId, orderId, leaseToken, new Error(providerResult.errorCode ?? 'Payment provider failed'));
+      return this.saveProviderResult(operationId, attemptId, providerResult, pricing.totalMinor, pricing.totalCnyMinor, request.currency, orderId, orderNumber, pricing.selectedDiscountReason, leaseToken);
+    } finally {
+      clearInterval(leaseRenewal);
     }
-    if (providerResult.status !== 'created') return this.saveFailure(operationId, attemptId, orderId, new Error(providerResult.errorCode ?? 'Payment provider failed'));
-    return this.saveProviderResult(operationId, attemptId, providerResult, pricing.totalMinor, pricing.totalCnyMinor, request.currency, orderId, orderNumber, pricing.selectedDiscountReason);
   }
 
   private claim(operationId: string): ClaimResult {
@@ -150,25 +159,47 @@ export class CheckoutCoreService {
       const leaseUntil = new Date(now.getTime() + PROCESSING_LEASE_MS).toISOString();
       const updated = this.database.connection.prepare(`
         UPDATE checkout_operations
-        SET status = 'processing', processing_started_at = ?, processing_lease_until = ?, updated_at = ?
+        SET status = 'processing', processing_started_at = ?, processing_lease_until = ?, processing_claim_token = ?, updated_at = ?
         WHERE id = ?
           AND (status IN ('received', 'review_required')
             OR (status IN ('processing', 'payment_pending') AND processing_lease_until IS NOT NULL AND processing_lease_until <= ?))
-      `).run(nowIso, leaseUntil, nowIso, operationId, nowIso);
-      const operation = this.database.connection.prepare(`SELECT id, client_idempotency_key, request_hash, request_json, status, order_id, response_json, total_amount_minor, currency, pricing_rule_version, processing_started_at, processing_lease_until, created_at, updated_at FROM checkout_operations WHERE id = ?`).get(operationId) as CheckoutOperationRow | undefined;
+      `).run(nowIso, leaseUntil, randomUUID(), nowIso, operationId, nowIso);
+      const operation = this.database.connection.prepare(`SELECT id, client_idempotency_key, request_hash, request_json, status, order_id, response_json, total_amount_minor, currency, pricing_rule_version, processing_started_at, processing_lease_until, processing_claim_token, created_at, updated_at FROM checkout_operations WHERE id = ?`).get(operationId) as CheckoutOperationRow | undefined;
       return operation ? { operation, claimed: updated.changes === 1 } : undefined;
     })();
     if (!result) throw new NotFoundException('Checkout operation not found');
     return result;
   }
 
-  private saveProviderResult(operationId: string, attemptId: string, result: ProviderCheckoutResult, totalAmountMinor: number, totalCnyMinor: number, currency: string, orderId: string, orderNumber: string, selectedDiscountReason: string | null): CheckoutResult {
-    if (result.livemode) return this.saveFailure(operationId, attemptId, orderId, new Error('Stripe returned a live-mode object'));
+  private startLeaseRenewal(operationId: string, leaseToken: string): NodeJS.Timeout {
+    const timer = setInterval(() => {
+      try {
+        const now = new Date();
+        const updated = this.database.connection.prepare(`
+          UPDATE checkout_operations
+          SET processing_lease_until = ?, updated_at = ?
+          WHERE id = ? AND status = 'payment_pending' AND processing_claim_token = ?
+        `).run(new Date(now.getTime() + PROCESSING_LEASE_MS).toISOString(), now.toISOString(), operationId, leaseToken);
+        if (updated.changes !== 1) clearInterval(timer);
+      } catch {
+        clearInterval(timer);
+      }
+    }, PROCESSING_LEASE_RENEWAL_MS);
+    timer.unref();
+    return timer;
+  }
+
+  private saveProviderResult(operationId: string, attemptId: string, result: ProviderCheckoutResult, totalAmountMinor: number, totalCnyMinor: number, currency: string, orderId: string, orderNumber: string, selectedDiscountReason: string | null, leaseToken: string): CheckoutResult {
+    if (result.livemode) return this.saveFailure(operationId, attemptId, orderId, leaseToken, new Error('Stripe returned a live-mode object'));
     const now = new Date().toISOString();
     return this.database.connection.transaction(() => {
       const response = { checkoutUrl: result.checkoutUrl ?? null, providerReference: result.providerReference ?? null, orderId, orderNumber, totalCnyMinor, selectedDiscountReason, providerProductId: result.providerProductId ?? null, providerPriceId: result.providerPriceId ?? null, paymentLinkId: result.paymentLinkId ?? null };
-      const operationUpdated = this.database.connection.prepare(`UPDATE checkout_operations SET status = 'completed', response_json = ?, processing_started_at = NULL, processing_lease_until = NULL, updated_at = ? WHERE id = ? AND status = 'payment_pending'`).run(JSON.stringify(response), now, operationId);
-      if (operationUpdated.changes !== 1) throw new ConflictException('Checkout operation state changed before provider result was saved');
+      const operationUpdated = this.database.connection.prepare(`UPDATE checkout_operations SET status = 'completed', response_json = ?, processing_started_at = NULL, processing_lease_until = NULL, processing_claim_token = NULL, updated_at = ? WHERE id = ? AND status = 'payment_pending' AND processing_claim_token = ?`).run(JSON.stringify(response), now, operationId, leaseToken);
+      if (operationUpdated.changes !== 1) {
+        const current = this.readOperation(operationId);
+        if (current.status === 'completed') return this.toResult(current);
+        throw new ConflictException('Checkout operation state changed before provider result was saved');
+      }
       const orderUpdated = this.database.connection.prepare(`UPDATE orders SET status = CASE WHEN status = 'paid' THEN 'paid' ELSE 'pending' END, stripe_product_id = ?, stripe_price_id = ?, stripe_payment_link_id = ?, updated_at = ? WHERE id = ? AND status IN ('pending', 'review_required', 'paid')`).run(result.providerProductId ?? null, result.providerPriceId ?? null, result.paymentLinkId ?? result.providerReference ?? null, now, orderId);
       if (orderUpdated.changes !== 1) throw new ConflictException('Order state changed before provider result was saved');
       const attemptUpdated = this.database.connection.prepare(`UPDATE checkout_attempts SET status = 'completed', provider_reference = ?, checkout_url = ?, stripe_product_id = ?, stripe_price_id = ?, stripe_payment_link_id = ?, stripe_checkout_session_id = ?, stripe_payment_intent_id = ?, updated_at = ? WHERE id = ? AND status = 'pending'`).run(result.providerReference ?? null, result.checkoutUrl ?? null, result.providerProductId ?? null, result.providerPriceId ?? null, result.paymentLinkId ?? null, result.checkoutSessionId ?? null, result.paymentIntentId ?? null, now, attemptId);
@@ -177,12 +208,16 @@ export class CheckoutCoreService {
     })();
   }
 
-  private saveFailure(operationId: string, attemptId: string, orderId: string, error: unknown): CheckoutResult {
+  private saveFailure(operationId: string, attemptId: string, orderId: string, leaseToken: string, error: unknown): CheckoutResult {
     const safeMessage = error instanceof Error && error.message.startsWith('FAKE_') ? error.message : 'Payment provider request did not complete; retry is safe';
     const now = new Date().toISOString();
     return this.database.connection.transaction(() => {
-      const operationUpdated = this.database.connection.prepare(`UPDATE checkout_operations SET status = 'review_required', processing_started_at = NULL, processing_lease_until = NULL, updated_at = ? WHERE id = ? AND status = 'payment_pending'`).run(now, operationId);
-      if (operationUpdated.changes !== 1) throw new ConflictException('Checkout operation state changed before provider failure was saved');
+      const operationUpdated = this.database.connection.prepare(`UPDATE checkout_operations SET status = 'review_required', processing_started_at = NULL, processing_lease_until = NULL, processing_claim_token = NULL, updated_at = ? WHERE id = ? AND status = 'payment_pending' AND processing_claim_token = ?`).run(now, operationId, leaseToken);
+      if (operationUpdated.changes !== 1) {
+        const current = this.readOperation(operationId);
+        if (current.status === 'completed' || current.status === 'review_required') return this.toResult(current);
+        throw new ConflictException('Checkout operation state changed before provider failure was saved');
+      }
       const attemptUpdated = this.database.connection.prepare(`UPDATE checkout_attempts SET status = 'review_required', error_code = 'PROVIDER_UNCERTAIN', error_message = ?, updated_at = ? WHERE id = ? AND status = 'pending'`).run(safeMessage, now, attemptId);
       if (attemptUpdated.changes !== 1) throw new ConflictException('Checkout attempt state changed before provider failure was saved');
       this.database.connection.prepare(`UPDATE orders SET status = 'review_required', updated_at = ? WHERE id = ? AND status IN ('pending', 'review_required')`).run(now, orderId);
@@ -211,8 +246,12 @@ export class CheckoutCoreService {
   }
 
   get(operationId: string): CheckoutResult {
-    const operation = this.database.connection.prepare(`SELECT id, client_idempotency_key, request_hash, request_json, status, order_id, response_json, total_amount_minor, currency, pricing_rule_version, processing_started_at, processing_lease_until, created_at, updated_at FROM checkout_operations WHERE id = ?`).get(operationId) as CheckoutOperationRow | undefined;
+    return this.toResult(this.readOperation(operationId));
+  }
+
+  private readOperation(operationId: string): CheckoutOperationRow {
+    const operation = this.database.connection.prepare(`SELECT id, client_idempotency_key, request_hash, request_json, status, order_id, response_json, total_amount_minor, currency, pricing_rule_version, processing_started_at, processing_lease_until, processing_claim_token, created_at, updated_at FROM checkout_operations WHERE id = ?`).get(operationId) as CheckoutOperationRow | undefined;
     if (!operation) throw new NotFoundException('Checkout operation not found');
-    return this.toResult(operation);
+    return operation;
   }
 }
