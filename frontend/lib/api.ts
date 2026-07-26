@@ -1,4 +1,4 @@
-import { CartItem, CheckoutResponse, PricePreview, Product } from './types';
+import { CartItem, CheckoutResponse, Order, PricePreview, Product } from './types';
 
 const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3000';
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -8,9 +8,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 export const api = {
   session: () => request<{ status: string }>('/checkout-intake/session'),
-  products: () => request<Product[]>('/catalog/products'),
-  preview: (currency: string, items: CartItem[]) => request<PricePreview>('/orders/preview', { method: 'POST', body: JSON.stringify({ currency, items }) }),
-  intake: (key: string, currency: string, items: CartItem[]) => request<{ operation: { id: string } }>('/checkout-intake', { method: 'POST', headers: { 'Idempotency-Key': key }, body: JSON.stringify({ currency, items }) }),
+  authSession: () => request<{ required: boolean }>('/auth/session'),
+  unlock: (passcode: string) => request<{ status: string }>('/auth/unlock', { method: 'POST', body: JSON.stringify({ passcode }) }),
+  products: (query = '') => request<Product[]>(`/catalog/products${query ? `?search=${encodeURIComponent(query)}` : ''}`),
+  preview: (currency: string, items: CartItem[], expoDiscountEnabled: boolean) => request<PricePreview>('/orders/preview', { method: 'POST', body: JSON.stringify({ currency, items: items.map(({ sku: _sku, ...item }) => item), expoDiscountEnabled }) }),
+  intake: (key: string, currency: string, items: CartItem[], customerName: string, customerContact: string, expoDiscountEnabled: boolean) => request<{ operation: { id: string } }>('/checkout-intake', { method: 'POST', headers: { 'Idempotency-Key': key }, body: JSON.stringify({ currency, items: items.map(({ sku: _sku, ...item }) => item), customerName, customerContact, expoDiscountEnabled }) }),
   process: (operationId: string) => request<CheckoutResponse>(`/checkout/${operationId}/process`, { method: 'POST' }),
   getCheckout: (operationId: string) => request<CheckoutResponse>(`/checkout/${operationId}`),
+  orders: () => request<Order[]>('/orders'),
+  order: (id: string) => request<Order>(`/orders/${id}`),
+  refreshOrder: (id: string) => request<Order>(`/orders/${id}/refresh`, { method: 'POST' }),
 };

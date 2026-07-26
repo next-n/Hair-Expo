@@ -12,7 +12,7 @@
 - Keep Stripe/provider network calls outside database transactions.
 - Use explicit application modules and replaceable interfaces for pricing and payment providers.
 
-## In scope for the foundation
+## In scope for the approved assignment
 
 - Product catalog and immutable price-list versions.
 - Orders with order-item price snapshots.
@@ -25,6 +25,9 @@
 - A fake payment provider for development and tests.
 - Audit records.
 - A structure for Stripe webhook-event deduplication.
+- The authoritative TRUNOV 75-row CSV catalog and its checksum/versioned import.
+- Blonde, Expo, volume, CNY-reference, and Trial Pack behavior stated in the final assignment brief.
+- Minimal booth passcode, customer details, orders list, Stripe test links, QR display, and paid-status refresh.
 
 ## Explicitly out of scope
 
@@ -33,7 +36,7 @@
 - Wallet ledger functionality.
 - KYC.
 - Settlement and reconciliation workflows.
-- Production frontend features beyond the approved mock vertical flow.
+- Inventory, refunds, multiple roles, analytics, invoices, and production features beyond the approved assignment workflow.
 - Business rules not present in the final assignment brief or CSV schema.
 
 ## Transaction and idempotency rules

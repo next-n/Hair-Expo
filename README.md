@@ -1,89 +1,187 @@
-# Hair Expo Checkout
+# TRUNOV HAIR Expo Checkout
 
-NestJS backend and Next.js tablet-first frontend for a small expo checkout and payment tool.
+Tablet-first NestJS + Next.js checkout tool for the China Hair Expo booth. The backend is the authority for catalog data, pricing, order snapshots, idempotency, and payment status.
 
-## Repository structure
+## Repository
 
 ```text
-backend/    NestJS modular monolith, SQLite migrations, pricing, checkout, fake provider
-frontend/   Next.js App Router booth checkout UI
-AGENTS.md   permanent engineering constraints
+backend/    NestJS modular monolith, SQLite, catalog import, pricing, checkout, Stripe, webhooks
+frontend/   Next.js App Router tablet checkout and orders screen
+backend/data/trunov_price_list.csv   unchanged authoritative 75-row source CSV
 ```
 
-## Requirements
+## Local setup
 
-- Node.js 20+
-- npm 10+
-
-## Backend setup
+Requirements: Node.js 20+ and npm 10+.
 
 ```bash
 cd backend
-npm install --legacy-peer-deps
-Copy-Item .env.example .env
-npm run build
+npm ci
+cp .env.example .env
+# Keep PAYMENT_PROVIDER=fake for local development without Stripe credentials.
 npm run typecheck
 npm test
 npm run lint
+npm run build
 npm run start:dev
 ```
 
-Backend environment variables are `PORT` and `DATABASE_PATH`. The backend loads `.env` at startup and runs migrations automatically.
-
-## Frontend setup
+In another terminal:
 
 ```bash
 cd frontend
-npm install
-Copy-Item .env.example .env.local
+npm ci
+cp .env.example .env.local
+npm test
 npm run typecheck
 npm run lint
 npm run build
 npm run dev
 ```
 
-The frontend uses `NEXT_PUBLIC_BACKEND_URL` and does not contain authoritative pricing logic.
+The backend defaults to `./data/hair-expo.sqlite`. It creates the directory, enables WAL mode, foreign keys, `busy_timeout=5000`, and `synchronous=FULL`, then applies migrations. Back up the SQLite database together with its WAL state after stopping the app; do not copy a live database while it is being written.
 
-Checkout intake is scoped to a server-issued HTTP-only booth-session cookie; the client cannot choose an actor identity. Intake rejects empty carts and applies operational request bounds. The mock catalog is seeded into SQLite by migration and read through `CatalogService`, so the API does not use a separate in-memory catalog.
+## Environment
 
-The default database is `./data/hair-expo.sqlite`. The application creates its parent directory, enables SQLite WAL mode, foreign keys, `busy_timeout=5000`, and `synchronous=FULL`, then applies pending migrations on startup.
+Backend `.env`:
 
-Set `DATABASE_PATH` to use another SQLite file. Tests use temporary databases and do not modify the development database.
+```text
+PORT=3000
+DATABASE_PATH=./data/hair-expo.sqlite
+PAYMENT_PROVIDER=fake
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+FRONTEND_URL=http://localhost:3001
+APP_PASSCODE=change-me
+CATALOG_CSV_PATH=./data/trunov_price_list.csv
+```
 
-## API and mock flow
+Set `PAYMENT_PROVIDER=stripe` only with a Stripe test key. Startup rejects keys that do not begin with `sk_test_`. Secrets are server-only, ignored by Git, and never sent to the frontend. `APP_PASSCODE` enables the small signed HttpOnly-cookie booth boundary; leaving it empty disables the boundary for local development.
+
+Frontend `.env.local`:
+
+```text
+NEXT_PUBLIC_BACKEND_URL=http://localhost:3000
+```
+
+## Catalog import
+
+The supplied CSV is stored unchanged at `backend/data/trunov_price_list.csv`. On startup, `CatalogImportService` validates the exact required columns, supported units, positive prices, nullable Trial Pack fields, exactly 75 rows, and unique SKUs. It computes a SHA-256 checksum and creates or reuses a price-list version. Importing is transactional and idempotent; restarting the app does not duplicate products. USD prices are stored in cents and CNY prices in fen. A later source file produces a new checksum/version and preserves existing order snapshots.
+
+## Pricing rules
+
+Pricing is backend-only. Controllers, the frontend, and payment providers do not calculate authoritative totals.
+
+The deterministic pipeline is:
+
+1. Load the product and immutable USD/CNY price snapshot from SQLite.
+2. Calculate base line totals and weight contributions. `per_kg` contributes 1,000 g per unit. Missing Trial Pack weight contributes 0 g until clarified.
+3. Apply item-level blonde surcharge: 3,000 basis points (30%) to the selected line before quantity multiplication.
+4. Calculate the subtotal after item surcharges.
+5. Select one order discount: volume (1,000 basis points) wins at 10,000 g or more; otherwise Expo (1,000 basis points) applies when enabled by default.
+6. Apply deterministic integer half-up rounding in cents/fen.
+7. Clamp USD and CNY reference totals at zero and return an immutable price snapshot.
+
+USD is the Stripe source amount. CNY is a reference/display amount calculated independently from the supplied CNY catalog prices; it is not an exchange-rate conversion. The selected discount reason is persisted with the order and adjustments. Trial Pack is currently included in the eligible subtotal, and its missing weight is treated as zero as required by the current brief.
+
+The exact brief example is covered by `backend/test/trunov-pricing.spec.ts`: 2 × SD-KT-22 with one blonde line plus 3 × RAW-MM-24 produces USD `$2,502.00` and CNY `¥17,514.00` after Expo discount.
+
+## Checkout and idempotency
+
+The frontend keeps one UUID idempotency key per checkout intention in local storage. It reuses that key after a timeout, reconnect, or duplicate click. Only “New order” clears it. The backend canonicalizes customer data, item identities/SKUs, quantities, blonde flags, and Expo toggle, hashes the representation with SHA-256, and enforces `(actor/session, operation type, idempotency key)` uniqueness in SQLite.
+
+Local writes are short transactions. The checkout operation/order/price snapshot is committed before any Stripe call. Stripe calls use stable keys:
+
+```text
+trunov:product:<checkoutOperationId>
+trunov:price:<checkoutOperationId>
+trunov:payment-link:<checkoutOperationId>
+```
+
+A provider timeout moves the operation to `review_required` without creating another local order. Retrying reuses the same order and provider keys. A duplicate successful request returns the existing Payment Link and QR source URL.
+
+## Stripe test mode
+
+With a test key configured:
+
+```bash
+cd backend
+$env:PAYMENT_PROVIDER='stripe'
+npm run start:dev
+```
+
+The adapter creates one order-specific Stripe Product, USD Price, and Payment Link. Stripe receives one summary line such as `TRUNOV HAIR Order EXPO-1234ABCD`, quantity 1, the authoritative USD total, and local order metadata. Returned objects are rejected if `livemode` is true. The Stripe SDK is pinned to `17.7.0` and the adapter pins API version `2024-06-20`.
+
+Forward webhooks locally with Stripe CLI:
+
+```bash
+stripe listen --forward-to localhost:3000/webhooks/stripe
+```
+
+Copy the CLI `whsec_...` value into `STRIPE_WEBHOOK_SECRET`. The raw body is preserved, signatures are verified, and only paid `checkout.session.completed` events can mark an order paid. Event IDs are unique; duplicate deliveries return HTTP 200 without applying a second effect. The orders screen also exposes a manual refresh fallback.
+
+## API
 
 - `GET /health`
-- `GET /catalog/products`
-- `POST /orders/preview` — backend-only price preview
-- `POST /checkout-intake` — durable idempotent intake
-- `POST /checkout/:operationId/process` — fake provider checkout
-- `GET /checkout/:operationId` — operation status/retry lookup
+- `GET /auth/session`, `POST /auth/unlock`
+- `GET /catalog/products?search=...`
+- `POST /orders/preview`
+- `GET /orders`, `GET /orders/:id`, `POST /orders/:id/refresh`
+- `GET /checkout-intake/session`, `POST /checkout-intake`
+- `POST /checkout/:operationId/process`, `GET /checkout/:operationId`
+- `POST /webhooks/stripe`
 
-The frontend persists its draft cart in local storage, reuses one idempotency key for one checkout intention, submits all previews and totals to the backend, and renders the stable fake checkout URL as a QR code. Starting a new order clears the cart and creates a new intent key.
+## Frontend workflow
 
-## CI
+The main screen supports catalog search, one-click normal/blonde additions, separate duplicate SKU lines, quantity steppers, Expo toggle, backend preview, customer name/contact, QR code from the returned Stripe URL, retry, and New Order. The cart, customer draft, discount toggle, and current idempotency key survive refresh and offline periods. The frontend displays backend results only; it does not reproduce pricing rules.
 
-GitHub Actions runs install, type-check, lint, tests, and production builds for both `backend/` and `frontend/` on pushes to `main` and pull requests.
+## CI and verification
 
-## Pricing architecture
+GitHub Actions runs `npm ci`, tests, type-check, lint, and production build for both projects. Local verification:
 
-Pricing is backend-only. `PricingService` resolves a normalized order draft into catalog/price data, then delegates calculation to the injected `PricingEngine`. Controllers and payment providers never calculate or trust client totals.
+```bash
+cd backend
+npm test -- --runInBand
+npm run typecheck
+npm run lint
+npm run build
 
-The default pipeline is deterministic:
+cd ../frontend
+npm test
+npm run typecheck
+npm run lint
+npm run build
+```
 
-1. Calculate base line totals using integer minor units.
-2. Apply item-level surcharges or discounts.
-3. Calculate the subtotal after item adjustments.
-4. Apply order-level adjustments, including discounts.
-5. Apply currency-rounding policy.
-6. Clamp the final total at zero and return an immutable price snapshot.
+The backend tests cover the 75-product import, exact assignment calculation, non-stacking discounts, missing Trial Pack fields, duplicate intake, concurrent processing, provider boundaries, migrations, and immutable deterministic pricing. Stripe tests should use mocked provider boundaries; a real test payment still requires the manual Stripe setup above.
 
-Percentage calculations use integer basis points (`10000` basis points = `100%`) and an explicit `FLOOR`, `CEIL`, or `HALF_UP` rounding mode. Money is never represented with JavaScript floating-point arithmetic.
+## AI Workflow Notes
 
-To add or replace a rule, implement `PricingRule`, give it a stable `code` and `version`, declare its scope, and register it in `PricingModule`. Rules receive immutable context and must return adjustments without changing their input. Rule order is stable by code and version, and duplicate rule codes are applied at most once per scope.
+Codex was used as the coding assistant. Representative prompts included:
 
-Blonde, expo, volume, Trial Pack, and CNY behavior are intentionally disabled placeholders. Their thresholds, percentages, eligibility, product mappings, currency behavior, and price-list semantics await the actual assignment brief and CSV schema. The current mock price source uses 100 minor units only to keep the development checkout vertical runnable; it is not a production price rule.
+1. “Implement the pricing foundation with replaceable rules, integer minor units, deterministic rounding, and tests.”
+2. “Review pricing as if it handles real payment amounts; check floating point, duplicate discounts, ordering, mutation, and negative totals.”
+3. “Implement the final assignment requirements from the TRUNOV PDF and CSV without replacing the existing architecture.”
 
-## Foundation scope
+The generated changes were verified by manually inspecting migrations, transaction boundaries, provider calls, canonical request construction, and the exact example arithmetic. Automated type-checks, lint, builds, migration tests, import tests, concurrency tests, and pricing tests were run. Mistakes caught during verification included a Nest provider-construction issue, a foreign-key ordering/reference issue, and an outdated fake-provider idempotency assertion; each was corrected before continuing.
 
-Stripe, authentication, final pricing rules, tax, discounts, inventory, fulfillment, settlement, and frontend production polish remain unresolved until the assignment brief and CSV schema arrive. Kafka, microservices, wallet ledger, KYC, and settlement are out of scope.
+## Screen-recording checklist
+
+1. Open the deployed app and unlock with the booth passcode.
+2. Search and add products.
+3. Add one normal and one blonde line of the same SKU.
+4. Show the valid Expo or volume discount.
+5. Create a Payment Link and QR.
+6. Open Stripe Checkout and pay with a test card such as `4242 4242 4242 4242`.
+7. Return to the order screen and show status becoming paid after the webhook.
+8. Open Orders and refresh the list.
+9. Demonstrate refresh/offline cart recovery if time permits.
+
+## Known limitations and manual work
+
+- A real Stripe test key, webhook secret, deployed HTTPS URL, and Stripe CLI/live test payment must be supplied by the operator; none are committed.
+- The current free-form search is intentionally simple; dedicated filter controls can be added after the live-call usability check.
+- Trial Pack missing weight is explicitly assumed to be 0 g, and Trial Pack remains discount eligible, pending company clarification.
+- Deployment provider setup, DNS/HTTPS, and the final screen recording remain operational deliverables rather than repository changes.
+
+Inventory, refunds, roles, analytics, Kafka, Redis, microservices, and PDF invoices are intentionally not implemented.

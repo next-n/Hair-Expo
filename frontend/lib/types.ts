@@ -1,4 +1,7 @@
-export type Product = { id: string; name: string; productType: string; tags: string[]; variants: Array<{ id: string; name: string; sku: string }> };
-export type CartItem = { productId: string; variantId: string; quantity: number; weightGrams?: number; color?: string; lengthInches?: number };
-export type PricePreview = { currency: string; subtotalMinor: number; totalMinor: number; adjustments: Array<{ code: string; label: string; type: string; amountMinor: number }>; ruleVersion: string };
-export type CheckoutResponse = { operationId: string; status: string; totalAmountMinor: number | null; currency: string | null; checkoutUrl: string | null };
+export type Product = {
+  id: string; sku: string; name: string; line: string; productType: string; lengthIn: string | null; unit: string; packWeightGrams: number | null; priceUsdMinor: number; priceCnyMinor: number; tags: string[]; variants: Array<{ id: string; name: string; sku: string }>;
+};
+export type CartItem = { productId: string; variantId: string; sku: string; quantity: number; blonde: boolean };
+export type PricePreview = { currency: string; lines: Array<{ itemRef: string; lineTotalMinor: number; lineTotalCnyMinor: number; quantity: number; blonde: boolean; sku?: string }>; subtotalMinor: number; subtotalCnyMinor: number; surchargeMinor: number; surchargeCnyMinor: number; discountMinor: number; discountCnyMinor: number; totalMinor: number; totalCnyMinor: number; totalWeightGrams: number; selectedDiscountReason: string | null; adjustments: Array<{ code: string; label: string; type: string; amountMinor: number; amountCnyMinor?: number }>; ruleVersion: string };
+export type CheckoutResponse = { operationId: string; orderId?: string; orderNumber?: string; status: string; paymentStatus?: string; totalAmountMinor: number | null; totalCnyMinor?: number | null; currency: string | null; checkoutUrl: string | null; selectedDiscountReason?: string | null };
+export type Order = { id: string; orderNumber: string; customerName?: string; customerContact?: string; createdAt: string; currency: string; totalAmountMinor: number; totalCnyMinor: number; paymentStatus: string; paymentLinkId?: string | null };
