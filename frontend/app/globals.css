@@ -45,6 +45,9 @@ input, select { width: 100%; border: 1px solid var(--line); border-radius: 9px; 
 .toggle { display: flex; grid-template-columns: auto 1fr; align-items: center; margin-top: 18px; }
 .toggle input { width: 20px; }
 .customer { display: grid; gap: 10px; margin-top: 18px; }
+.customer-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.customer-heading h3 { margin: 0; }
+.customer-clear { min-height: 38px; padding: 8px 11px; }
 .total { font-size: 20px; margin-top: 8px; padding-top: 12px; border-top: 1px solid #b7ebcd; }
 .orders-panel { margin-top: 20px; }
 .orders { display: grid; gap: 12px; }
