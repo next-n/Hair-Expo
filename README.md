@@ -43,6 +43,28 @@ The backend defaults to `./data/hair-expo.sqlite`. It creates the directory, ena
 
 Deployment requirement: run one backend instance with a persistent disk for `DATABASE_PATH`. Do not deploy this SQLite writer on an ephemeral or horizontally scaled filesystem; a redeploy must preserve the database, `-wal`, and `-shm` files.
 
+## Production deployment layout
+
+The production server keeps the Git checkout, runtime configuration, and SQLite data in separate locations:
+
+```text
+/opt/hair-expo                 Git checkout and Docker build context
+/opt/hair-expo/backend         NestJS backend source
+/etc/hair-expo/backend.env     protected backend runtime environment
+/etc/hair-expo/frontend.env    protected frontend runtime/build environment
+/var/lib/hair-expo             persistent SQLite database, WAL, and SHM files
+```
+
+The production Compose file is `deploy/docker-compose.production.yml`. It loads `/etc/hair-expo/backend.env` and `/etc/hair-expo/frontend.env` with `env_file`; those files are not part of the repository and must never be committed. Deploy or restart the application from the checkout with:
+
+```bash
+cd /opt/hair-expo
+docker compose --env-file /etc/hair-expo/frontend.env \
+  -f deploy/docker-compose.production.yml up -d --build
+```
+
+The backend container reads its settings through `process.env`, while the frontend public settings are passed as build arguments and runtime environment values. Keep Stripe keys, webhook secrets, and booth passcodes only in the protected server environment files.
+
 ## Environment
 
 Backend `.env`:
