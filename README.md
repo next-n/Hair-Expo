@@ -1,6 +1,6 @@
 # TRUNOV HAIR Expo Checkout
 
-Tablet-first NestJS + Next.js checkout tool for the China Hair Expo booth. The backend is the authority for catalog data, pricing, order snapshots, idempotency, and payment status.
+Tablet-first NestJS + Next.js checkout tool for the China Hair Expo booth. The backend is the authority for catalog data, pricing, order snapshots, idempotency, and payment status. Payment-link safety is built around one checkout identity from the client idempotency key through the SQLite operation, order, attempt, and stable Stripe idempotency key; atomic claims, short leases with fencing tokens, stored-result reuse, signed webhook deduplication, and Payment Link deactivation prevent duplicate operations and unsafe retries. See the [Payment Idempotency Design](docs/hair-expo-payment-idempotency.pdf) technical note for the full flow and failure cases.
 
 ## Repository
 
@@ -154,7 +154,7 @@ After the first valid paid event, the backend deactivates the associated Payment
 
 ## Frontend workflow
 
-The main screen supports catalog search, one-click normal/blonde additions, separate duplicate SKU lines, quantity steppers, Expo toggle, backend preview, customer name/contact, QR code from the returned Stripe URL, retry, and New Order. The cart, customer draft, discount toggle, and current idempotency key survive refresh and offline periods. The frontend displays backend results only; it does not reproduce pricing rules.
+The main screen supports catalog search with relevance ranking (SKU matches first, then product name/type and substring matches), one-click normal/blonde additions, merging of identical product/variant/option lines, separate normal and blonde lines, editable quantities, quantity steppers, Expo toggle, backend preview, customer name/contact, QR code from the returned Stripe URL, retry, and New Order. The cart, customer draft, discount toggle, and current idempotency key survive refresh and offline periods. The frontend displays backend results only; it does not reproduce pricing rules.
 
 ## CI and verification
 

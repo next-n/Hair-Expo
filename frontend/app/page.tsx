@@ -17,6 +17,36 @@ const CHECKOUT_KEY = 'hair-expo-checkout-result';
 type StoredCheckout = { requestKey: string; response: CheckoutResponse };
 type StoredIntent = { key: string; requestKey: string };
 
+function mergeCartItems(items: readonly CartItem[]): CartItem[] {
+  const merged: CartItem[] = [];
+  for (const item of items) {
+    const index = merged.findIndex((existing) => existing.productId === item.productId && existing.variantId === item.variantId && Boolean(existing.blonde) === Boolean(item.blonde));
+    if (index === -1) {
+      merged.push({ ...item });
+      continue;
+    }
+    const existing = merged[index];
+    const quantity = existing.quantity + item.quantity;
+    merged[index] = { ...existing, quantity: Number.isSafeInteger(quantity) ? quantity : Number.MAX_SAFE_INTEGER };
+  }
+  return merged;
+}
+
+function productSearchRank(product: Product, query: string): number | null {
+  if (!query) return 0;
+  const fields = [product.sku, product.line, product.productType, product.lengthIn ?? ''].map((field) => field.toLowerCase());
+  if (!fields.some((field) => field.includes(query))) return null;
+  if (fields[0] === query) return 0;
+  if (fields[0].startsWith(query)) return 1;
+  if (fields[1].startsWith(query)) return 2;
+  if (fields[2].startsWith(query)) return 3;
+  if (fields[3].startsWith(query)) return 4;
+  if (fields[0].includes(query)) return 5;
+  if (fields[1].includes(query)) return 6;
+  if (fields[2].includes(query)) return 7;
+  return 8;
+}
+
 export default function HomePage() {
   const { locale, t } = useI18n();
   const [products, setProducts] = useState<Product[]>([]);
@@ -42,7 +72,7 @@ export default function HomePage() {
   const [hydrated, setHydrated] = useState(false);
   const [authReady, setAuthReady] = useState(false);
 
-  const visibleProducts = useMemo(() => products.filter((product) => !search || `${product.sku} ${product.line} ${product.productType} ${product.lengthIn ?? ''}`.toLowerCase().includes(search.toLowerCase())), [products, search]);
+  const visibleProducts = useMemo(() => products.map((product, index) => ({ product, index, rank: productSearchRank(product, search.trim().toLowerCase()) })).filter((result): result is { product: Product; index: number; rank: number } => result.rank !== null).sort((left, right) => left.rank - right.rank || left.index - right.index).map((result) => result.product), [products, search]);
   const cartCount = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
   const linePreview = (index: number) => preview?.lines[index];
   const visibleOrders = useMemo(() => orderFilter === 'paid' ? orders.filter((order) => order.paymentStatus === 'paid') : orders, [orderFilter, orders]);
@@ -58,7 +88,7 @@ export default function HomePage() {
     setOnline(navigator.onLine);
     const on = () => setOnline(true); const off = () => setOnline(false);
     window.addEventListener('online', on); window.addEventListener('offline', off);
-    const savedCart = localStorage.getItem(CART_KEY); if (savedCart) setCart(JSON.parse(savedCart) as CartItem[]);
+    const savedCart = localStorage.getItem(CART_KEY); if (savedCart) setCart(mergeCartItems(JSON.parse(savedCart) as CartItem[]));
     const savedCustomer = localStorage.getItem(CUSTOMER_KEY); if (savedCustomer) { const value = JSON.parse(savedCustomer) as { name: string; contact: string }; setCustomerName(value.name); setCustomerContact(value.contact); }
     const savedCheckout = localStorage.getItem(CHECKOUT_KEY);
     if (savedCheckout) {
@@ -107,7 +137,7 @@ export default function HomePage() {
   const add = (product = visibleProducts[0], isBlonde = blonde) => {
     if (checkoutLocked || !product || product.variants.length === 0) return;
     const variant = product.variants[0];
-    setCart((current) => [...current, { productId: product.id, variantId: variant.id, sku: product.sku, quantity, blonde: isBlonde }]);
+    setCart((current) => mergeCartItems([...current, { productId: product.id, variantId: variant.id, sku: product.sku, quantity, blonde: isBlonde }]));
     setPreview(null); setCheckout(null); setBlonde(false); setQuantity(1);
   };
   const remove = (index: number) => { if (checkoutLocked) return; setCart((current) => current.filter((_, itemIndex) => itemIndex !== index)); setQuantityDrafts({}); setPreview(null); setCheckout(null); };

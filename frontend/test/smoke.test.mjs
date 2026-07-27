@@ -8,6 +8,8 @@ test('frontend application entrypoint exists', async () => {
   assert.match(page, /setInterval/);
   assert.match(page, /paidStartNewOrder/);
   assert.match(page, /LanguageSwitcher/);
+  assert.match(page, /mergeCartItems/);
+  assert.match(page, /productSearchRank/);
   assert.match(page, /CHECKOUT_KEY/);
 });
 
@@ -42,4 +44,6 @@ test('invoice includes the backend pricing breakdown', async () => {
   assert.match(invoice, /discountMinor/);
   assert.match(invoice, /invoiceSurcharge/);
   assert.match(invoice, /cnyReference/);
+  assert.match(invoice, /weightContributionGrams/);
+  assert.doesNotMatch(invoice, /totalWeightGrams == null/);
 });

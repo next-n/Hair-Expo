@@ -19,10 +19,9 @@ export function printInvoice(order: Order, locale: Locale = 'en'): void {
   const discountLabel = order.selectedDiscountReason === 'VOLUME_DISCOUNT' ? text('volumeDiscount') : order.selectedDiscountReason === 'EXPO_DISCOUNT' ? text('expoDiscount') : text('discount');
   const items = order.items ?? [];
   const rows = items.length > 0
-    ? items.map((item) => `<tr><td>${escapeHtml(item.sku)}</td><td>${escapeHtml(item.line ?? item.productType ?? '')}</td><td>${item.quantity}</td><td>${money(item.lineTotalMinor, currency, locale)}</td></tr>`).join('')
-    : `<tr><td colspan="4">${text('customerDetailsUnavailable')}</td></tr>`;
+    ? items.map((item) => `<tr><td>${escapeHtml(item.sku)}</td><td>${escapeHtml(item.line ?? item.productType ?? '')}</td><td>${item.quantity}</td><td>${item.weightContributionGrams == null ? '—' : `${new Intl.NumberFormat(locale).format(item.weightContributionGrams)} g`}</td><td>${money(item.lineTotalMinor, currency, locale)}</td></tr>`).join('')
+    : `<tr><td colspan="5">${text('customerDetailsUnavailable')}</td></tr>`;
   const summaryRows = [
-    order.totalWeightGrams == null ? '' : `<tr><td>${text('weight')}</td><td>${new Intl.NumberFormat(locale).format(order.totalWeightGrams)} g</td></tr>`,
     order.subtotalMinor == null ? '' : `<tr><td>${text('subtotal')}</td><td>${money(order.subtotalMinor, currency, locale)}</td></tr>`,
     order.surchargeMinor && order.surchargeMinor > 0 ? `<tr><td>${text('invoiceSurcharge')}</td><td>${money(order.surchargeMinor, currency, locale)}</td></tr>` : '',
     order.discountMinor && order.discountMinor > 0 ? `<tr><td>${escapeHtml(discountLabel)}</td><td>−${money(order.discountMinor, currency, locale)}</td></tr>` : '',
@@ -32,7 +31,7 @@ export function printInvoice(order: Order, locale: Locale = 'en'): void {
 
   popup.document.write(`<!doctype html><html lang="${locale}"><head><title>${escapeHtml(order.orderNumber)} ${text('invoiceReceipt')}</title><style>
     body{font-family:Arial,sans-serif;color:#17202a;margin:40px;max-width:760px}header{display:flex;justify-content:space-between;border-bottom:2px solid #17202a;padding-bottom:18px}h1{margin:0 0 8px;font-size:24px}h2{margin-top:32px;font-size:18px}.muted{color:#667085}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;border-bottom:1px solid #e4e7ec;padding:10px 6px}td:last-child,th:last-child{text-align:right}.summary{max-width:420px;margin-left:auto}.summary .grand-total td{font-size:20px;font-weight:700;border-top:2px solid #17202a}.status{color:#027a48;font-weight:700}@media print{body{margin:12mm}}
-  </style></head><body><header><div><h1>${escapeHtml(COMPANY_NAME)}</h1><div class="muted">${escapeHtml(COMPANY_DETAILS)}</div></div><div><strong>${text('invoiceReceipt')}</strong><br>${escapeHtml(order.orderNumber)}<br><span class="status">${escapeHtml(status)}</span></div></header><h2>${text('invoiceCustomer')}</h2><div>${escapeHtml(order.customerName || text('walkIn'))}</div><div class="muted">${escapeHtml(order.customerContact || '')}</div><h2>${text('invoiceItems')}</h2><table><thead><tr><th>SKU</th><th>${text('invoiceProduct')}</th><th>${text('invoiceQuantity')}</th><th>${text('invoiceAmount')}</th></tr></thead><tbody>${rows}</tbody></table><table class="summary"><tbody>${summaryRows}</tbody></table><p class="muted">${text('generated', { date: formatDate(order.createdAt, locale) })}</p></body></html>`);
+  </style></head><body><header><div><h1>${escapeHtml(COMPANY_NAME)}</h1><div class="muted">${escapeHtml(COMPANY_DETAILS)}</div></div><div><strong>${text('invoiceReceipt')}</strong><br>${escapeHtml(order.orderNumber)}<br><span class="status">${escapeHtml(status)}</span></div></header><h2>${text('invoiceCustomer')}</h2><div>${escapeHtml(order.customerName || text('walkIn'))}</div><div class="muted">${escapeHtml(order.customerContact || '')}</div><h2>${text('invoiceItems')}</h2><table><thead><tr><th>SKU</th><th>${text('invoiceProduct')}</th><th>${text('invoiceQuantity')}</th><th>${text('weight')}</th><th>${text('invoiceAmount')}</th></tr></thead><tbody>${rows}</tbody></table><table class="summary"><tbody>${summaryRows}</tbody></table><p class="muted">${text('generated', { date: formatDate(order.createdAt, locale) })}</p></body></html>`);
   popup.document.close();
   popup.focus();
   window.setTimeout(() => popup.print(), 250);
