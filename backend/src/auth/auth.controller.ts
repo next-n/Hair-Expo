@@ -1,15 +1,16 @@
-import { Body, Controller, Get, Headers, Post, Res, UnauthorizedException } from '@nestjs/common';
-import { Response } from 'express';
+import { Body, Controller, Get, Headers, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
+import { boothCookieAttributes } from './cookie-options';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Post('unlock')
-  unlock(@Body() body: { passcode?: string }, @Res({ passthrough: true }) response: Response) {
-    if (!this.auth.unlock(body.passcode ?? '')) throw new UnauthorizedException('Invalid booth passcode');
-    response.setHeader('Set-Cookie', `${this.auth.cookieName()}=${this.auth.cookieValue()}; HttpOnly; SameSite=Lax; Path=/; Max-Age=28800`);
+  unlock(@Body() body: { passcode?: string }, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
+    if (!this.auth.unlock(body.passcode ?? '', request.ip ?? request.socket.remoteAddress ?? 'unknown')) throw new UnauthorizedException('Invalid booth passcode');
+    response.setHeader('Set-Cookie', `${this.auth.cookieName()}=${this.auth.cookieValue()}; ${boothCookieAttributes()}`);
     return { status: 'ready' };
   }
 

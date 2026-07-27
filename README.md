@@ -76,7 +76,10 @@ PAYMENT_PROVIDER=fake
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 FRONTEND_URL=http://localhost:4421
+CORS_ALLOWED_ORIGINS=http://localhost:4421
 APP_PASSCODE=change-me
+AUTH_MAX_ATTEMPTS=5
+AUTH_RATE_LIMIT_WINDOW_SECONDS=900
 CATALOG_CSV_PATH=./data/trunov_price_list.csv
 CHECKOUT_MAX_QUANTITY=10000
 ```
@@ -84,6 +87,8 @@ CHECKOUT_MAX_QUANTITY=10000
 Set `PAYMENT_PROVIDER=stripe` only with a Stripe test key. Startup rejects keys that do not begin with `sk_test_`. Secrets are server-only, ignored by Git, and never sent to the frontend. `APP_PASSCODE` enables the small signed HttpOnly-cookie booth boundary; leaving it empty disables the boundary for local development.
 
 `CHECKOUT_MAX_QUANTITY` is an operational request-safety ceiling, not a pricing or catalog rule. It defaults to 10,000 units per line and can be raised through the backend environment when a wholesale order requires more; the frontend does not impose a separate business quantity limit.
+
+`CORS_ALLOWED_ORIGINS` is a comma-separated exact-origin allowlist and defaults to `FRONTEND_URL`. Credentials are accepted only from those origins. Failed booth passcode attempts are rate-limited per client using `AUTH_MAX_ATTEMPTS` within `AUTH_RATE_LIMIT_WINDOW_SECONDS`; production cookies also include `Secure`.
 
 Frontend `.env.local`:
 
@@ -141,6 +146,8 @@ A provider timeout moves the operation to `review_required` without creating ano
 
 Processing claims use a two-minute lease. Once the local transaction enters `payment_pending`, the checkout core renews that lease every 30 seconds while the provider request is running, so a live request is not reclaimed merely because the provider call is slow. If the process crashes, the lease eventually expires and a retry may resume with the same stable provider idempotency key. A lease token fences stale requests from saving a late success or failure over the current operation. The provider call remains outside local transactions.
 
+Stripe webhook payment confirmation validates the signed Checkout Session against the local order before changing status: amount, currency, and Payment Link must all match the immutable order snapshot. A second paid session for an already-paid order is recorded as `DUPLICATE_PAYMENT_DETECTED` with `manual_refund_review` metadata and does not reapply the payment. Manual status refresh uses the same amount, currency, and Payment Link checks.
+
 ## Stripe test mode
 
 With a test key configured:
@@ -162,6 +169,8 @@ stripe listen --forward-to localhost:4423/webhooks/stripe
 Copy the CLI `whsec_...` value into `STRIPE_WEBHOOK_SECRET`. The raw body is preserved, signatures are verified, and only paid `checkout.session.completed` events can mark an order paid. Event IDs are unique; duplicate deliveries return HTTP 200 without applying a second effect. The orders screen also exposes a manual refresh fallback.
 
 After the first valid paid event, the backend deactivates the associated Payment Link outside the database transaction and records the deactivation locally. If deactivation fails, the webhook is rejected so Stripe can retry it. Stripe checkout-session, payment-intent, and payment-link identifiers are unique in the local database, and paid transitions are conditional.
+
+For HTTPS deployment, use `deploy/nginx-hair-expo.conf` as the certificate/bootstrap configuration, obtain the certificate with Certbot, then use `deploy/nginx-hair-expo-https.conf`. The HTTPS configuration redirects port 80 to HTTPS, proxies both domains, and rate-limits `/auth/unlock` at the edge. The application also enforces the CORS allowlist and passcode rate limit so the boundary remains protected if the backend is reached through another trusted proxy.
 
 ## API
 

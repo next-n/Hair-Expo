@@ -43,7 +43,17 @@ export class StripePaymentProvider implements PaymentProvider {
     this.assertTestMode(link.livemode);
     const sessions = await this.stripe.checkout.sessions.list({ payment_link: reference, limit: 1 });
     const session = sessions.data[0];
-    return { status: session?.payment_status === 'paid' ? 'created' : 'failed', providerReference: reference, checkoutUrl: link.url, livemode: link.livemode, paymentLinkId: link.id, checkoutSessionId: session?.id, paymentIntentId: typeof session?.payment_intent === 'string' ? session.payment_intent : session?.payment_intent?.id };
+    return {
+      status: session?.payment_status === 'paid' ? 'created' : 'failed',
+      providerReference: reference,
+      checkoutUrl: link.url,
+      livemode: link.livemode,
+      paymentLinkId: link.id,
+      checkoutSessionId: session?.id,
+      paymentIntentId: typeof session?.payment_intent === 'string' ? session.payment_intent : session?.payment_intent?.id,
+      amountMinor: session?.amount_total ?? undefined,
+      currency: session?.currency?.toUpperCase() ?? undefined,
+    };
   }
 
   async deactivateCheckout(reference: string): Promise<void> {

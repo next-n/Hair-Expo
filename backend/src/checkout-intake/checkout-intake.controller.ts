@@ -5,6 +5,7 @@ import { BoothSessionService } from './booth-session.service';
 import { CheckoutIntakeRequestDto } from './checkout-intake.dto';
 import { CheckoutIntakeService } from './checkout-intake.service';
 import { PasscodeGuard } from '../auth/auth.guard';
+import { boothCookieAttributes } from '../auth/cookie-options';
 
 @Controller('checkout-intake')
 @UseGuards(PasscodeGuard)
@@ -35,7 +36,7 @@ export class CheckoutIntakeController {
   private setSessionCookie(cookieHeader: string | undefined, response: Response): string {
     const candidate = cookieHeader?.split(';').map((part) => part.trim()).find((part) => part.startsWith('booth_session_id='))?.split('=')[1];
     const sessionId = this.boothSessions.getOrCreate(candidate);
-    response.setHeader('Set-Cookie', `booth_session_id=${sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=28800`);
+    response.setHeader('Set-Cookie', `booth_session_id=${sessionId}; ${boothCookieAttributes()}`);
     return sessionId;
   }
 }

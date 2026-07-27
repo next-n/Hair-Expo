@@ -19,11 +19,20 @@ export class OrdersService {
   }
 
   async refresh(orderId: string) {
-    const row = this.database.connection.prepare('SELECT status, stripe_payment_link_id, stripe_payment_link_deactivated_at FROM orders WHERE id = ?').get(orderId) as { status: string; stripe_payment_link_id: string | null; stripe_payment_link_deactivated_at: string | null } | undefined;
+    const row = this.database.connection.prepare('SELECT status, currency, total_amount_minor, stripe_payment_link_id, stripe_payment_link_deactivated_at FROM orders WHERE id = ?').get(orderId) as { status: string; currency: string; total_amount_minor: number; stripe_payment_link_id: string | null; stripe_payment_link_deactivated_at: string | null } | undefined;
     if (!row) throw new NotFoundException('Order not found');
     if (!row.stripe_payment_link_id) return this.get(orderId);
     const status = await this.paymentProvider.retrieveCheckout(row.stripe_payment_link_id);
-    if (status.status === 'created' && status.checkoutSessionId) this.markPaid(orderId, status.checkoutSessionId, status.paymentIntentId ?? null, row.stripe_payment_link_id, 'manual_refresh');
+    if (status.status === 'created' && status.checkoutSessionId) {
+      const matches = status.amountMinor === row.total_amount_minor
+        && status.currency?.toUpperCase() === row.currency.toUpperCase()
+        && status.paymentLinkId === row.stripe_payment_link_id;
+      if (!matches) {
+        this.audit.record({ action: 'PAYMENT_VALIDATION_FAILED', entityType: 'order', entityId: orderId, source: 'manual_refresh', metadata: { checkoutSessionId: status.checkoutSessionId, paymentIntentId: status.paymentIntentId ?? null, paymentLinkId: status.paymentLinkId ?? null, amountMinor: status.amountMinor ?? null, currency: status.currency ?? null } });
+        throw new ConflictException('Payment does not match the local order');
+      }
+      this.markPaid(orderId, status.checkoutSessionId, status.paymentIntentId ?? null, row.stripe_payment_link_id, 'manual_refresh');
+    }
     const current = this.database.connection.prepare('SELECT status, stripe_payment_link_deactivated_at FROM orders WHERE id = ?').get(orderId) as { status: string; stripe_payment_link_deactivated_at: string | null };
     if (current.status === 'paid' && !current.stripe_payment_link_deactivated_at) await this.deactivatePaymentLink(orderId, row.stripe_payment_link_id, 'manual_refresh');
     return this.get(orderId);

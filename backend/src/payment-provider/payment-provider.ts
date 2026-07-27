@@ -21,6 +21,8 @@ export interface CheckoutResult {
   readonly paymentLinkId?: string;
   readonly checkoutSessionId?: string;
   readonly paymentIntentId?: string;
+  readonly amountMinor?: number;
+  readonly currency?: string;
 }
 
 export interface PaymentProvider {
