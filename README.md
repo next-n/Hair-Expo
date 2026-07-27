@@ -65,6 +65,31 @@ docker compose --env-file /etc/hair-expo/frontend.env \
 
 The backend container reads its settings through `process.env`, while the frontend public settings are passed as build arguments and runtime environment values. Keep Stripe keys, webhook secrets, and booth passcodes only in the protected server environment files.
 
+## Backup and restore verification
+
+The SQLite database is production state and must be backed up independently of the Git checkout, Docker images, and environment files. The repository includes `deploy/hair-expo-backup.sh`, which contains no secrets and should be installed as a root-owned server utility:
+
+```bash
+sudo install -o root -g root -m 700 deploy/hair-expo-backup.sh /usr/local/sbin/hair-expo-backup.sh
+sudo install -o root -g root -m 644 deploy/hair-expo-backup.service /etc/systemd/system/hair-expo-backup.service
+sudo install -o root -g root -m 644 deploy/hair-expo-backup.timer /etc/systemd/system/hair-expo-backup.timer
+sudo systemctl daemon-reload
+sudo systemctl enable --now hair-expo-backup.timer
+```
+
+The timer runs an online SQLite backup every five minutes. Each successful backup is written under `/var/backups/hair-expo`, receives a SHA-256 sidecar, is checked for SQLite integrity and foreign-key violations, and is checked against the expected application schema. The default retention is 288 backups (24 hours at five-minute intervals); set `HAIR_EXPO_BACKUP_RETENTION` in `/etc/default/hair-expo-backup` if a longer local window is required.
+
+Check the schedule and run a restore rehearsal with:
+
+```bash
+systemctl list-timers hair-expo-backup.timer
+sudo journalctl -u hair-expo-backup.service --since today
+sudo /usr/local/sbin/hair-expo-backup.sh status
+sudo /usr/local/sbin/hair-expo-backup.sh restore-verify
+```
+
+`restore-verify` checks the checksum of the newest backup and opens it as a temporary database inside the backend runtime. It never replaces `/var/lib/hair-expo/hair-expo.sqlite`; an actual restore remains a separately approved maintenance operation. Local backups protect against application mistakes but not disk loss or server loss, so copy verified backups to independent storage as an operational follow-up.
+
 ## Environment
 
 Backend `.env`:
@@ -207,15 +232,43 @@ npm run build
 
 The backend tests cover the 75-product import, exact assignment calculation, non-stacking discounts, missing Trial Pack fields, duplicate intake, concurrent processing, lease recovery, provider boundaries, webhook deactivation, migrations, and immutable deterministic pricing. Stripe tests should use mocked provider boundaries; a real test payment still requires the manual Stripe setup above.
 
-## AI Workflow Notes
+## AI Workflow and Verification
 
-Codex was used as the coding assistant. Representative prompts included:
+OpenAI Codex was used as the coding assistant for this repository. Cursor, Claude Code, and GitHub Copilot were not used. AI-generated code was treated as a draft: the implementation was reviewed against the assignment, the confirmed architecture, and the payment-safety requirements before it was kept.
+
+Examples of prompts used during the project included:
 
 1. “Implement the pricing foundation with replaceable rules, integer minor units, deterministic rounding, and tests.”
 2. “Review pricing as if it handles real payment amounts; check floating point, duplicate discounts, ordering, mutation, and negative totals.”
-3. “Implement the final assignment requirements from the TRUNOV PDF and CSV without replacing the existing architecture.”
+3. The real-production hardening review:
 
-The generated changes were verified by manually inspecting migrations, transaction boundaries, provider calls, canonical request construction, and the exact example arithmetic. Automated type-checks, lint, builds, migration tests, import tests, concurrency tests, and pricing tests were run. Mistakes caught during verification included a Nest provider-construction issue, a foreign-key ordering/reference issue, and an outdated fake-provider idempotency assertion; each was corrected before continuing.
+   > Remaining real-production concerns
+   > 1. Validate payment amount in the webhook
+   >
+   > The webhook verifies Stripe’s signature and checks that the session is paid, but it does not compare:
+   > `session.amount_total == order.total_amount_minor`
+   > `session.currency == order.currency`
+   > `session.payment_link == expected payment link`
+   > before marking the order paid.
+   >
+   > 2. Detect a second real payment
+   >
+   > Two customers could open the same Payment Link before the first payment webhook deactivates it. A second successful Checkout Session should create `DUPLICATE_PAYMENT_DETECTED` and require manual refund review.
+   >
+   > 3. Harden the web boundary
+   >
+   > CORS currently accepts reflected origins with credentials. Cookies also lack the Secure flag, while the included Nginx configuration only listens on HTTP. Before public deployment: allow only the frontend domain, add Secure to production cookies, enable HTTPS and HTTP-to-HTTPS redirect, and rate-limit passcode attempts.
+
+Verification included:
+
+- Reviewing migrations, SQLite constraints, transaction boundaries, lease fencing, provider calls, canonical request construction, and webhook handling.
+- Checking that Stripe calls occur outside database transactions and that frontend totals are never trusted as authoritative payment amounts.
+- Running backend and frontend tests, type-checks, lint, and production builds.
+- Running focused tests for migrations, catalog import, pricing arithmetic, duplicate rules, idempotent intake, concurrent processing, lease recovery, provider idempotency, webhook deduplication, amount/currency/Payment Link validation, duplicate-payment detection, and authentication rate limiting.
+- Checking production health, HTTPS redirects, exact CORS behavior, container status, and the absence of committed secrets.
+- Correcting issues found during verification, including a Nest provider-construction issue, a foreign-key ordering/reference issue, an outdated fake-provider idempotency assertion, and the production webhook/web-boundary hardening gaps above.
+
+No unconfirmed pricing, catalog, refund, or settlement rules were invented. Where the assignment was silent, the behavior remains documented as an assumption or is kept behind a replaceable boundary.
 
 ## Screen-recording checklist
 

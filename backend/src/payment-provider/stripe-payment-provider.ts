@@ -41,8 +41,8 @@ export class StripePaymentProvider implements PaymentProvider {
   async retrieveCheckout(reference: string): Promise<CheckoutResult> {
     const link = await this.stripe.paymentLinks.retrieve(reference);
     this.assertTestMode(link.livemode);
-    const sessions = await this.stripe.checkout.sessions.list({ payment_link: reference, limit: 1 });
-    const session = sessions.data[0];
+    const sessions = await this.stripe.checkout.sessions.list({ payment_link: reference, limit: 10 });
+    const session = sessions.data.find((candidate) => candidate.payment_status === 'paid') ?? sessions.data[0];
     return {
       status: session?.payment_status === 'paid' ? 'created' : 'failed',
       providerReference: reference,
