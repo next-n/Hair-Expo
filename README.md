@@ -121,13 +121,20 @@ Frontend `.env.local`:
 NEXT_PUBLIC_BACKEND_URL=http://localhost:4423
 NEXT_PUBLIC_INVOICE_COMPANY_NAME=TRUNOV HAIR
 NEXT_PUBLIC_INVOICE_COMPANY_DETAILS=Expo booth · Company details placeholder
+NEXT_PUBLIC_GUIDE_CHECKOUT_URL=/
+NEXT_PUBLIC_GUIDE_VIDEO_URL=
+NEXT_PUBLIC_GUIDE_URL=https://guide.guangzhouhairexpo.asia
 ```
 
-Invoice company details are public frontend configuration, not secrets. Change these values in `frontend/.env.local` and restart the frontend before printing new invoices. Booth staff do not edit company identity per order.
+Invoice company details are public frontend configuration, not secrets. Change these values in `frontend/.env.local` and restart the frontend before printing new invoices. `NEXT_PUBLIC_GUIDE_URL` controls the checkout page's link to the public guide; it falls back to the local `/guide` route when unset. Booth staff do not edit company identity per order.
+
+`/guide` is a public, static project guide and tutorial page. It does not call the backend, create checkout operations, load orders, or poll payment status. `NEXT_PUBLIC_GUIDE_VIDEO_URL` is an optional public link to the five-minute screen recording; leave it empty to show the reserved video placeholder. The live checkout link remains protected by the booth passcode, which should be sent to reviewers separately rather than placed in the page or repository.
+
+For production on `guide.guangzhouhairexpo.asia`, set `NEXT_PUBLIC_GUIDE_CHECKOUT_URL=https://checkout.guangzhouhairexpo.asia` in the frontend deployment environment so the guide's checkout links leave the guide host. The repository includes `deploy/nginx-guide-https.conf`, which proxies the public guide host to the static Next.js `/guide` route, caches guide HTML and assets, and rate-limits requests per client IP.
 
 ## Localization
 
-The frontend supports English (`en`), Simplified Chinese (`zh-CN`), Russian (`ru`), and Burmese (`my`). The language selector is available on the booth, orders, and order-status screens. The selected locale is stored in the browser under `hair-expo-locale`, so a refresh keeps the operator's choice; a first visit uses the browser language when it matches a supported locale and otherwise falls back to English.
+The frontend supports English (`en`), Simplified Chinese (`zh-CN`), Russian (`ru`), and Burmese (`my`). The language selector is available on the booth, orders, and order-status screens; the public project guide offers English, Chinese, and Russian. The selected locale is stored in the browser under `hair-expo-locale`, so a refresh keeps the operator's choice; a first visit uses the browser language when it matches a supported locale and otherwise falls back to English.
 
 User-interface text is kept in `frontend/lib/i18n.tsx`. Backend error codes are mapped to localized messages at the frontend boundary, while catalog names, SKUs, product attributes, and pricing-rule codes remain source/business data rather than translated UI copy. Money and dates are formatted for display with `Intl`; authoritative amounts remain integer minor units from the backend and are never recalculated in the browser. Invoice printouts use the selected locale and the public company values from `frontend/.env.local`.
 
