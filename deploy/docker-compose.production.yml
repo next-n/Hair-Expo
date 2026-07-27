@@ -12,7 +12,7 @@ services:
       NODE_ENV: production
       PORT: 4423
       DATABASE_PATH: /app/data/hair-expo.sqlite
-      CATALOG_CSV_PATH: /app/catalog/trunov_price_list.csv
+      CATALOG_CSV_PATH: /app/backend/catalog/trunov_price_list.csv
     ports:
       - "127.0.0.1:4423:4423"
     volumes:
