@@ -107,11 +107,15 @@ AUTH_MAX_ATTEMPTS=5
 AUTH_RATE_LIMIT_WINDOW_SECONDS=900
 CATALOG_CSV_PATH=./data/trunov_price_list.csv
 CHECKOUT_MAX_QUANTITY=10000
+# Non-production UI test only; production is always fixed at 24 hours.
+PAYMENT_LINK_TTL_TEST_SECONDS=5
 ```
 
 Set `PAYMENT_PROVIDER=stripe` only with a Stripe test key. Startup rejects keys that do not begin with `sk_test_`. Secrets are server-only, ignored by Git, and never sent to the frontend. `APP_PASSCODE` enables the small signed HttpOnly-cookie booth boundary; leaving it empty disables the boundary for local development.
 
 `CHECKOUT_MAX_QUANTITY` is an operational request-safety ceiling, not a pricing or catalog rule. It defaults to 10,000 units per line and can be raised through the backend environment when a wholesale order requires more; the frontend does not impose a separate business quantity limit.
+
+Payment-link QR records have a fixed 24-hour application lifetime in production. For local expiry-state testing only, set `PAYMENT_LINK_TTL_TEST_SECONDS=5`; production intentionally ignores this setting. An expired unpaid link is displayed as expired and deactivated by the backend before it can be used again. The order-detail action for paid, pending, and expired orders copies the saved order into a checkout draft; it does not create a new order or payment link until the booth operator reviews and submits the draft.
 
 `CORS_ALLOWED_ORIGINS` is a comma-separated exact-origin allowlist and defaults to `FRONTEND_URL`. Credentials are accepted only from those origins. Failed booth passcode attempts are rate-limited per client using `AUTH_MAX_ATTEMPTS` within `AUTH_RATE_LIMIT_WINDOW_SECONDS`; production cookies also include `Secure`.
 
@@ -210,7 +214,7 @@ For HTTPS deployment, use `deploy/nginx-hair-expo.conf` as the certificate/boots
 - `GET /auth/session`, `POST /auth/unlock`
 - `GET /catalog/products?search=...`
 - `POST /orders/preview`
-- `GET /orders`, `GET /orders/:id`, `POST /orders/:id/refresh`
+- `GET /orders?status=all|paid|pending&from=<ISO>&to=<ISO>`, `GET /orders/:id`, `POST /orders/:id/refresh`, `POST /orders/:id/recreate`
 - `GET /checkout-intake/session`, `POST /checkout-intake`
 - `POST /checkout/:operationId/process`, `GET /checkout/:operationId`
 - `POST /webhooks/stripe`
@@ -218,6 +222,8 @@ For HTTPS deployment, use `deploy/nginx-hair-expo.conf` as the certificate/boots
 ## Frontend workflow
 
 The main screen supports catalog search with relevance ranking (SKU matches first, then product name/type and substring matches), one-click normal/blonde additions, merging of identical product/variant/option lines, separate normal and blonde lines, editable quantities, quantity steppers, Expo toggle, backend preview, customer name/contact, QR code from the returned Stripe URL, retry, and New Order. The cart, customer draft, discount toggle, and current idempotency key survive refresh and offline periods. The frontend displays backend results only; it does not reproduce pricing rules.
+
+The Orders screen can filter by Paid, Pending, or All, search customer names, and filter by calendar dates (the date fields expand to complete local calendar days; there are no time-of-day controls). Each order has a detail page; order-number and `View order` navigation show a short loading state before opening the detail page. Every order can use `Reorder` to prefill the checkout cart with the same customer, product variants, quantities, blonde selections, and Expo-discount selection. This action only prepares a checkout draft; it does not copy payment status or create a new payment link until the booth operator reviews and submits it. Pending orders still reuse their existing QR while it is active, and expired links show an expired state. The original order remains unchanged in all cases; paid orders are immutable and can also be printed as invoices. Legacy order snapshots missing variant IDs are resolved from their saved SKU when details are loaded, so historical paid orders remain reorderable.
 
 ## CI and verification
 

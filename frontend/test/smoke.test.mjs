@@ -17,6 +17,11 @@ test('order status route exists', async () => {
   const page = await readFile(new URL('../app/orders/[orderId]/page.tsx', import.meta.url), 'utf8');
   assert.match(page, /export default function OrderPage/);
   assert.match(page, /setInterval/);
+  assert.match(page, /createCheckoutDraftFromOrder/);
+  assert.match(page, /localStorage\.setItem\(CART_KEY/);
+  assert.match(page, /REORDER_DISCOUNT_KEY/);
+  assert.doesNotMatch(page, /api\.recreateOrder/);
+  assert.match(page, /t\('reorder'\)/);
 });
 
 test('orders list route exists', async () => {
@@ -26,6 +31,8 @@ test('orders list route exists', async () => {
   assert.match(page, /href="\/"/);
   assert.match(page, /COMPANY_DETAILS/);
   assert.match(page, /company-link/);
+  assert.match(page, /customerSearch/);
+  assert.match(page, /loading-spinner/);
 });
 
 test('supported locales include Burmese', async () => {

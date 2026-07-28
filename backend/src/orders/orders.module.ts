@@ -5,6 +5,7 @@ import { OrdersService } from './orders.service';
 import { AuditModule } from '../audit/audit.module';
 import { PaymentProviderModule } from '../payment-provider/payment-provider.module';
 import { AuthModule } from '../auth/auth.module';
+import { CheckoutCoreModule } from '../checkout-core/checkout-core.module';
 
-@Module({ imports: [PricingModule, AuditModule, PaymentProviderModule, AuthModule], controllers: [OrdersController], providers: [OrdersService], exports: [OrdersService] })
+@Module({ imports: [PricingModule, AuditModule, PaymentProviderModule, AuthModule, CheckoutCoreModule], controllers: [OrdersController], providers: [OrdersService], exports: [OrdersService] })
 export class OrdersModule {}

@@ -9,5 +9,6 @@ import { AuthModule } from '../auth/auth.module';
   imports: [PricingModule, PaymentProviderModule, AuthModule],
   controllers: [CheckoutCoreController],
   providers: [CheckoutCoreService],
+  exports: [CheckoutCoreService],
 })
 export class CheckoutCoreModule {}

@@ -2,7 +2,9 @@ import { ConflictException, Inject, Injectable, Logger, NotFoundException } from
 import { randomUUID } from 'node:crypto';
 import { DatabaseService } from '../database/database.service';
 import { CheckoutResult as ProviderCheckoutResult, PAYMENT_PROVIDER, PaymentProvider } from '../payment-provider/payment-provider';
+import { PriceSnapshot } from '../pricing/pricing-input';
 import { PricingService } from '../pricing/pricing.service';
+import { isPaymentLinkExpired, paymentLinkExpiresAt } from './payment-link-expiry';
 
 const PROCESSING_LEASE_MS = 2 * 60 * 1000;
 const PROCESSING_LEASE_RENEWAL_MS = 30 * 1000;
@@ -39,6 +41,9 @@ export type CheckoutResult = {
   checkoutUrl: string | null;
   providerReference?: string | null;
   selectedDiscountReason?: string | null;
+  paymentLinkCreatedAt?: string | null;
+  paymentLinkExpiresAt?: string | null;
+  paymentLinkExpired?: boolean;
 };
 
 type CheckoutRequest = {
@@ -46,6 +51,8 @@ type CheckoutRequest = {
   customerName?: string;
   customerContact?: string;
   expoDiscountEnabled?: boolean;
+  sourceOrderId?: string;
+  pricingSnapshot?: PriceSnapshot;
   items: Array<{ sku?: string; productId: string; variantId?: string; quantity: number; blonde?: boolean; weightGrams?: number; color?: string; lengthInches?: number }>;
 };
 
@@ -68,7 +75,7 @@ export class CheckoutCoreService {
     if (!claimed.processing_claim_token) throw new ConflictException('Checkout operation has no processing claim token');
     const leaseToken = claimed.processing_claim_token;
     const request = JSON.parse(claimed.request_json) as CheckoutRequest;
-    const pricing = this.pricingService.calculate({
+    const pricing = request.pricingSnapshot ?? this.pricingService.calculate({
       currency: request.currency,
       expoDiscountEnabled: request.expoDiscountEnabled,
       items: request.items.map((item, index) => ({ itemRef: `item-${index + 1}`, ...item })),
@@ -86,22 +93,22 @@ export class CheckoutCoreService {
         this.database.connection.prepare(`
           INSERT INTO orders (id, order_number, status, currency, total_amount_minor, created_at, updated_at,
             customer_name, customer_contact, total_weight_grams, subtotal_amount_minor, surcharge_amount_minor,
-            discount_amount_minor, subtotal_cny_minor, surcharge_cny_minor, discount_cny_minor, total_cny_minor, selected_discount_reason)
-          VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            discount_amount_minor, subtotal_cny_minor, surcharge_cny_minor, discount_cny_minor, total_cny_minor, selected_discount_reason, recreated_from_order_id)
+          VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(orderId, orderNumber, request.currency, pricing.totalMinor, now, now, request.customerName ?? null, request.customerContact ?? null,
           pricing.totalWeightGrams, pricing.subtotalMinor, pricing.surchargeMinor, pricing.discountMinor,
-          pricing.subtotalCnyMinor, pricing.surchargeCnyMinor, pricing.discountCnyMinor, pricing.totalCnyMinor, pricing.selectedDiscountReason);
+          pricing.subtotalCnyMinor, pricing.surchargeCnyMinor, pricing.discountCnyMinor, pricing.totalCnyMinor, pricing.selectedDiscountReason, request.sourceOrderId ?? null);
         const insertItem = this.database.connection.prepare(`
-          INSERT INTO order_items (id, order_id, product_id, sku_snapshot, name_snapshot, quantity, unit_amount_minor,
+          INSERT INTO order_items (id, order_id, product_id, variant_id, sku_snapshot, name_snapshot, quantity, unit_amount_minor,
             currency, line_total_amount_minor, pricing_metadata_json, created_at, line, product_type, length_in, unit,
             weight_contribution_grams, blonde, base_unit_amount_minor, base_unit_amount_cny_minor,
             adjusted_unit_amount_minor, adjusted_unit_amount_cny_minor, line_total_cny_minor)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         for (const [index, line] of pricing.lines.entries()) {
           const source = request.items[index];
           const productId = this.database.connection.prepare('SELECT id FROM products WHERE id = ?').get(source.productId) ? source.productId : null;
-          insertItem.run(randomUUID(), orderId, productId, line.sku ?? source.sku ?? source.productId, line.productType ?? line.sku ?? source.productId, line.quantity,
+          insertItem.run(randomUUID(), orderId, productId, line.variantId ?? source.variantId ?? null, line.sku ?? source.sku ?? source.productId, line.productType ?? line.sku ?? source.productId, line.quantity,
             line.adjustedUnitPriceMinor, request.currency, line.lineTotalMinor,
             JSON.stringify({ color: source.color, requestedWeightGrams: source.weightGrams, requestedLengthInches: source.lengthInches }), now,
             line.line, line.productType, line.lengthIn ?? source.lengthInches?.toString() ?? null, line.unit,
@@ -197,8 +204,9 @@ export class CheckoutCoreService {
   private saveProviderResult(operationId: string, attemptId: string, result: ProviderCheckoutResult, totalAmountMinor: number, totalCnyMinor: number, currency: string, orderId: string, orderNumber: string, selectedDiscountReason: string | null, leaseToken: string): CheckoutResult {
     if (result.livemode) return this.saveFailure(operationId, attemptId, orderId, leaseToken, new Error('Stripe returned a live-mode object'));
     const now = new Date().toISOString();
+    const expiresAt = paymentLinkExpiresAt(new Date(now));
     return this.database.connection.transaction(() => {
-      const response = { checkoutUrl: result.checkoutUrl ?? null, providerReference: result.providerReference ?? null, orderId, orderNumber, totalCnyMinor, selectedDiscountReason, providerProductId: result.providerProductId ?? null, providerPriceId: result.providerPriceId ?? null, paymentLinkId: result.paymentLinkId ?? null };
+      const response = { checkoutUrl: result.checkoutUrl ?? null, providerReference: result.providerReference ?? null, orderId, orderNumber, totalCnyMinor, selectedDiscountReason, providerProductId: result.providerProductId ?? null, providerPriceId: result.providerPriceId ?? null, paymentLinkId: result.paymentLinkId ?? null, paymentLinkCreatedAt: now, paymentLinkExpiresAt: expiresAt };
       const operationUpdated = this.database.connection.prepare(`UPDATE checkout_operations SET status = 'completed', response_json = ?, processing_started_at = NULL, processing_lease_until = NULL, processing_claim_token = NULL, updated_at = ? WHERE id = ? AND status = 'payment_pending' AND processing_claim_token = ?`).run(JSON.stringify(response), now, operationId, leaseToken);
       if (operationUpdated.changes !== 1) {
         const current = this.readOperation(operationId);
@@ -207,9 +215,9 @@ export class CheckoutCoreService {
       }
       const orderUpdated = this.database.connection.prepare(`UPDATE orders SET status = CASE WHEN status = 'paid' THEN 'paid' ELSE 'pending' END, stripe_product_id = ?, stripe_price_id = ?, stripe_payment_link_id = ?, updated_at = ? WHERE id = ? AND status IN ('pending', 'review_required', 'paid')`).run(result.providerProductId ?? null, result.providerPriceId ?? null, result.paymentLinkId ?? result.providerReference ?? null, now, orderId);
       if (orderUpdated.changes !== 1) throw new ConflictException('Order state changed before provider result was saved');
-      const attemptUpdated = this.database.connection.prepare(`UPDATE checkout_attempts SET status = 'completed', provider_reference = ?, checkout_url = ?, stripe_product_id = ?, stripe_price_id = ?, stripe_payment_link_id = ?, stripe_checkout_session_id = ?, stripe_payment_intent_id = ?, updated_at = ? WHERE id = ? AND status = 'pending'`).run(result.providerReference ?? null, result.checkoutUrl ?? null, result.providerProductId ?? null, result.providerPriceId ?? null, result.paymentLinkId ?? null, result.checkoutSessionId ?? null, result.paymentIntentId ?? null, now, attemptId);
+      const attemptUpdated = this.database.connection.prepare(`UPDATE checkout_attempts SET status = 'completed', provider_reference = ?, checkout_url = ?, stripe_product_id = ?, stripe_price_id = ?, stripe_payment_link_id = ?, stripe_checkout_session_id = ?, stripe_payment_intent_id = ?, payment_link_created_at = ?, payment_link_expires_at = ?, updated_at = ? WHERE id = ? AND status = 'pending'`).run(result.providerReference ?? null, result.checkoutUrl ?? null, result.providerProductId ?? null, result.providerPriceId ?? null, result.paymentLinkId ?? null, result.checkoutSessionId ?? null, result.paymentIntentId ?? null, now, expiresAt, now, attemptId);
       if (attemptUpdated.changes !== 1) throw new ConflictException('Checkout attempt state changed before provider result was saved');
-      return { operationId, orderId, orderNumber, status: 'completed', paymentStatus: 'pending', totalAmountMinor, totalCnyMinor, currency, checkoutUrl: result.checkoutUrl ?? null, providerReference: result.providerReference ?? null, selectedDiscountReason };
+      return { operationId, orderId, orderNumber, status: 'completed', paymentStatus: 'pending', totalAmountMinor, totalCnyMinor, currency, checkoutUrl: result.checkoutUrl ?? null, providerReference: result.providerReference ?? null, selectedDiscountReason, paymentLinkCreatedAt: now, paymentLinkExpiresAt: expiresAt, paymentLinkExpired: false };
     })();
   }
 
@@ -247,6 +255,9 @@ export class CheckoutCoreService {
       checkoutUrl: response.checkoutUrl ?? null,
       providerReference: response.providerReference ?? null,
       selectedDiscountReason: response.selectedDiscountReason ?? null,
+      paymentLinkCreatedAt: response.paymentLinkCreatedAt ?? null,
+      paymentLinkExpiresAt: response.paymentLinkExpiresAt ?? null,
+      paymentLinkExpired: isPaymentLinkExpired(response.paymentLinkExpiresAt),
     };
   }
 

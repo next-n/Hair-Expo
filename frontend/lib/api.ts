@@ -15,7 +15,14 @@ export const api = {
   intake: (key: string, currency: string, items: CartItem[], customerName: string, customerContact: string, expoDiscountEnabled: boolean) => request<{ operation: { id: string } }>('/checkout-intake', { method: 'POST', headers: { 'Idempotency-Key': key }, body: JSON.stringify({ currency, items: items.map(({ sku: _sku, ...item }) => item), customerName, customerContact, expoDiscountEnabled }) }),
   process: (operationId: string) => request<CheckoutResponse>(`/checkout/${operationId}/process`, { method: 'POST' }),
   getCheckout: (operationId: string) => request<CheckoutResponse>(`/checkout/${operationId}`),
-  orders: () => request<Order[]>('/orders'),
+  orders: (params?: { status?: 'paid' | 'pending' | 'all'; from?: string; to?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.status) query.set('status', params.status);
+    if (params?.from) query.set('from', params.from);
+    if (params?.to) query.set('to', params.to);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return request<Order[]>(`/orders${suffix}`);
+  },
   order: (id: string) => request<Order>(`/orders/${id}`),
   refreshOrder: (id: string) => request<Order>(`/orders/${id}/refresh`, { method: 'POST' }),
 };

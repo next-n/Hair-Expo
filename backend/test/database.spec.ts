@@ -36,7 +36,7 @@ describe('database initialization', () => {
     service.onModuleInit();
     service.onModuleInit();
     expect(service.connection.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get())
-      .toEqual({ count: 11 });
+      .toEqual({ count: 12 });
   });
 
   it('enforces foreign keys and keeps pragmas after reopening the file', () => {
@@ -76,6 +76,8 @@ describe('migration schema constraints', () => {
     const column = service.connection.prepare('PRAGMA table_info(order_items)').all()
       .find((row) => (row as { name: string }).name === 'unit_amount_minor') as { type: string };
     expect(column.type).toBe('INTEGER');
+    const attemptColumns = service.connection.prepare('PRAGMA table_info(checkout_attempts)').all() as Array<{ name: string }>;
+    expect(attemptColumns.map(({ name }) => name)).toEqual(expect.arrayContaining(['payment_link_created_at', 'payment_link_expires_at']));
     service.connection.prepare(`INSERT INTO processed_webhook_events
       (id, provider_name, provider_event_id, event_type, payload_json, processed_at)
       VALUES (?, ?, ?, ?, ?, ?)`).run('event-1', 'fake', 'provider-event-1', 'test', '{}', new Date().toISOString());
