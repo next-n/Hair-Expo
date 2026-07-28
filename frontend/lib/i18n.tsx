@@ -110,6 +110,7 @@ const en = {
   viewOrder: 'View order',
   items: 'Items',
   paymentLink: 'Payment link',
+  paymentLinkExpiresIn: 'Payment link expires in {{time}}',
   paymentLinkExpired: 'Payment QR expired',
   paymentLinkExpiredHint: 'This unpaid payment link is no longer available. Create a new order to issue a fresh link.',
   paymentLinkUnavailable: 'Payment link unavailable',
@@ -146,6 +147,7 @@ const messages: Record<Locale, MessageSet> = {
   en,
   'zh-CN': {
     ...orderFlowTranslations['zh-CN'],
+    paymentLinkExpiresIn: '\u652f\u4ed8\u94fe\u63a5\u5c06\u5728 {{time}} \u540e\u8fc7\u671f',
     cartJump: '购物车',
     projectGuide: '项目指南',
     projectGuideHint: '查看项目流程和支付安全说明。',
@@ -157,6 +159,7 @@ const messages: Record<Locale, MessageSet> = {
   },
   ru: {
     ...orderFlowTranslations.ru,
+    paymentLinkExpiresIn: '\u0421\u0441\u044b\u043b\u043a\u0430 \u043d\u0430 \u043e\u043f\u043b\u0430\u0442\u0443 \u0438\u0441\u0442\u0435\u043a\u0430\u0435\u0442 \u0447\u0435\u0440\u0435\u0437 {{time}}',
     cartJump: 'Корзина',
     projectGuide: 'Руководство проекта',
     projectGuideHint: 'Ознакомьтесь с процессом и мерами безопасности платежей.',
@@ -168,6 +171,7 @@ const messages: Record<Locale, MessageSet> = {
   },
   my: {
     ...orderFlowTranslations.my,
+    paymentLinkExpiresIn: '\u1004\u103d\u1031\u1015\u1031\u1038\u1001\u103b\u1031\u1019\u103e\u102f\u101c\u1004\u1037\u103a\u1001\u103a \u101e\u1000\u103a\u1010\u1019\u103a\u1038\u1000\u102f\u1014\u103a\u101b\u1014\u103a {{time}}',
     cartJump: 'လှည်း',
     projectGuide: 'ပရောဂျက်လမ်းညွှန်',
     projectGuideHint: 'ပရောဂျက်လုပ်ဆောင်မှုနှင့် ငွေပေးချေမှုလုံခြုံရေး မှတ်စုများကို ကြည့်ပါ။',

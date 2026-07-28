@@ -9,6 +9,7 @@ import { COMPANY_DETAILS, COMPANY_NAME } from '../../../lib/company';
 import { formatMinor, LanguageSwitcher, localizeError, useI18n } from '../../../lib/i18n';
 import { printInvoice } from '../../../lib/invoice';
 import { CartItem, Order } from '../../../lib/types';
+import { PaymentLinkCountdown } from '../../../components/payment-link-countdown';
 
 const CART_KEY = 'hair-expo-cart';
 const CUSTOMER_KEY = 'hair-expo-customer';
@@ -180,7 +181,7 @@ export default function OrderPage() {
                 <button className="button secondary" onClick={createCheckoutDraftFromOrder}>{t('reorder')}</button>
               </div>
             </div>
-            <div className="order-qr-code"><QRCodeSVG value={order.checkoutUrl!} size={220} includeMargin /></div>
+            <div className="order-qr-code"><QRCodeSVG value={order.checkoutUrl!} size={220} includeMargin /><PaymentLinkCountdown expiresAt={order.paymentLinkExpiresAt} /></div>
           </section>}
 
           {!isPaid && !canShowQr && (order.paymentLinkExpired || order.paymentLinkDeactivatedAt) && <section className="order-payment-card expired">

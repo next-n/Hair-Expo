@@ -124,8 +124,9 @@ input, select { width: 100%; border: 1px solid var(--line); border-radius: 9px; 
 .order-payment-card h2 { margin: 0; font-size: 21px; }
 .order-payment-card p { margin: 8px 0 0; font-size: 13px; }
 .order-payment-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 17px; }
-.order-qr-code { display: grid; place-items: center; padding: 10px; border-radius: 12px; background: #fff; }
+.order-qr-code { display: grid; place-items: center; gap: 10px; padding: 10px; border-radius: 12px; background: #fff; }
 .order-qr-code svg { display: block; max-width: min(220px, 42vw); height: auto; }
+.payment-link-countdown { color: var(--accent); font-size: 13px; font-weight: 700; }
 .order-payment-card.expired .payment-card-kicker { color: #b54708; }
 .order-payment-card.paid-card .payment-card-kicker { color: #027a48; }
 @media (max-width: 720px) {
