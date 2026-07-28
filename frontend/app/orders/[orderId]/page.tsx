@@ -16,6 +16,7 @@ const CUSTOMER_KEY = 'hair-expo-customer';
 const INTENT_KEY = 'hair-expo-checkout-intent';
 const CHECKOUT_KEY = 'hair-expo-checkout-result';
 const REORDER_DISCOUNT_KEY = 'hair-expo-reorder-expo-discount';
+const REORDER_NOTICE_KEY = 'hair-expo-reorder-notice';
 
 export default function OrderPage() {
   const { locale, t } = useI18n();
@@ -69,6 +70,7 @@ export default function OrderPage() {
     localStorage.setItem(CART_KEY, JSON.stringify(copiedItems));
     localStorage.setItem(CUSTOMER_KEY, JSON.stringify({ name: order.customerName ?? '', contact: order.customerContact ?? '' }));
     localStorage.setItem(REORDER_DISCOUNT_KEY, String(order.selectedDiscountReason === 'EXPO_DISCOUNT'));
+    localStorage.setItem(REORDER_NOTICE_KEY, 'true');
     localStorage.removeItem(INTENT_KEY);
     localStorage.removeItem(CHECKOUT_KEY);
     window.location.assign('/');

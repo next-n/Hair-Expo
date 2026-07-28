@@ -35,6 +35,7 @@ const en = {
   addBlonde: 'Add blonde +30%',
   cart: 'Cart ({{count}})',
   cartJump: 'Cart',
+  reorderCartHint: 'Reorder loaded — tap Cart to review.',
   backendAuthoritative: 'Backend prices are authoritative.',
   newOrder: 'New order',
   paymentLinkCreated: 'Payment link created. Start a new order to change this cart.',
@@ -138,6 +139,7 @@ const orderFlowTranslations: Record<Exclude<Locale, 'en'>, MessageSet> = {
 };
 
 const myCartVocabulary = {
+  reorderCartHint: 'Reorder loaded — tap Cart to review.',
   offlineCartSaved: 'အော့ဖ်လိုင်း — ဈေးခြင်းကို သိမ်းဆည်းထားသည်',
   cart: 'ဈေးခြင်း ({{count}})',
   paymentLinkCreated: 'ငွေပေးချေမှုလင့်ခ် ဖန်တီးပြီးပါပြီ။ ဤဈေးခြင်းကို ပြောင်းလဲရန် အော်ဒါအသစ် စတင်ပါ။',
@@ -149,6 +151,7 @@ const messages: Record<Locale, MessageSet> = {
     ...orderFlowTranslations['zh-CN'],
     paymentLinkExpiresIn: '\u652f\u4ed8\u94fe\u63a5\u5c06\u5728 {{time}} \u540e\u8fc7\u671f',
     cartJump: '购物车',
+    reorderCartHint: '重新下单内容已加载 — 点击“购物车”查看。',
     projectGuide: '项目指南',
     projectGuideHint: '查看项目流程和支付安全说明。',
     openGuide: '查看指南',
@@ -161,6 +164,7 @@ const messages: Record<Locale, MessageSet> = {
     ...orderFlowTranslations.ru,
     paymentLinkExpiresIn: '\u0421\u0441\u044b\u043b\u043a\u0430 \u043d\u0430 \u043e\u043f\u043b\u0430\u0442\u0443 \u0438\u0441\u0442\u0435\u043a\u0430\u0435\u0442 \u0447\u0435\u0440\u0435\u0437 {{time}}',
     cartJump: 'Корзина',
+    reorderCartHint: 'Повторный заказ загружен — нажмите «Корзина», чтобы проверить.',
     projectGuide: 'Руководство проекта',
     projectGuideHint: 'Ознакомьтесь с процессом и мерами безопасности платежей.',
     openGuide: 'Открыть руководство',
