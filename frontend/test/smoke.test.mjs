@@ -54,6 +54,14 @@ test('supported locales include Burmese', async () => {
   assert.match(i18n, /outside the allowed range/);
 });
 
+test('guide presents the technology stack', async () => {
+  const guide = await readFile(new URL('../app/guide/guide-content.tsx', import.meta.url), 'utf8');
+  assert.match(guide, /builtWith/);
+  assert.match(guide, /Next\.js · React · TypeScript/);
+  assert.match(guide, /NestJS · Node\.js · TypeScript/);
+  assert.match(guide, /Stripe Checkout · webhooks/);
+});
+
 test('invoice includes the backend pricing breakdown', async () => {
   const invoice = await readFile(new URL('../lib/invoice.ts', import.meta.url), 'utf8');
   assert.match(invoice, /selectedDiscountReason/);
