@@ -214,7 +214,7 @@ For HTTPS deployment, use `deploy/nginx-hair-expo.conf` as the certificate/boots
 - `GET /auth/session`, `POST /auth/unlock`
 - `GET /catalog/products?search=...`
 - `POST /orders/preview`
-- `GET /orders?status=all|paid|pending&from=<ISO>&to=<ISO>`, `GET /orders/:id`, `POST /orders/:id/refresh`, `POST /orders/:id/recreate`
+- `GET /orders?status=all|paid|pending&from=<ISO>&to=<ISO>`, `GET /orders/:id`, `POST /orders/:id/refresh`
 - `GET /checkout-intake/session`, `POST /checkout-intake`
 - `POST /checkout/:operationId/process`, `GET /checkout/:operationId`
 - `POST /webhooks/stripe`

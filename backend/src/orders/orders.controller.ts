@@ -23,9 +23,6 @@ export class OrdersController {
   @Post(':orderId/refresh')
   refresh(@Param('orderId') orderId: string) { return this.orders.refresh(orderId); }
 
-  @Post(':orderId/recreate')
-  recreate(@Param('orderId') orderId: string) { return this.orders.recreate(orderId); }
-
   @Post('preview')
   preview(@Body() draft: OrderPreviewDto) {
     return this.pricing.calculate({ currency: draft.currency, expoDiscountEnabled: draft.expoDiscountEnabled, items: draft.items.map((item, index) => ({ itemRef: `item-${index + 1}`, ...item })) });

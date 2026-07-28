@@ -1,12 +1,8 @@
-import { ConflictException, Inject, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { ConflictException, Inject, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service';
-import { CheckoutCoreService, CheckoutResult } from '../checkout-core/checkout-core.service';
 import { isPaymentLinkExpired, paymentLinkExpiresAt } from '../checkout-core/payment-link-expiry';
-import { canonicalJson, checkoutRequestHash } from '../checkout-intake/canonical-request';
 import { DatabaseService } from '../database/database.service';
 import { PAYMENT_PROVIDER, PaymentProvider } from '../payment-provider/payment-provider';
-import { PriceSnapshot } from '../pricing/pricing-input';
 
 type OrderStatusFilter = 'paid' | 'pending' | 'all';
 
@@ -37,7 +33,6 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
     @Inject(PAYMENT_PROVIDER) private readonly paymentProvider: PaymentProvider,
-    @Optional() private readonly checkoutCore?: CheckoutCoreService,
   ) {}
 
   onModuleInit(): void {
@@ -138,49 +133,6 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
     return this.get(orderId);
   }
 
-  async recreate(orderId: string): Promise<CheckoutResult> {
-    if (!this.checkoutCore) throw new Error('Checkout core is not available');
-    const source = this.get(orderId) as unknown as Record<string, unknown> & {
-      id: string; status?: string; paymentStatus: string; currency: string; customerName?: string | null;
-      customerContact?: string | null; items: Array<Record<string, unknown>>; adjustments: Array<Record<string, unknown>>;
-      totalAmountMinor: number; totalCnyMinor: number; subtotalMinor: number; subtotalCnyMinor: number;
-      surchargeMinor: number; surchargeCnyMinor: number; discountMinor: number; discountCnyMinor: number;
-      totalWeightGrams: number; selectedDiscountReason: string | null;
-    };
-    if (source.paymentStatus === 'paid') throw new ConflictException('Paid orders cannot be recreated');
-    const link = this.readPaymentLink(orderId);
-    const activeLink = Boolean(link.checkoutUrl && !link.paymentLinkDeactivatedAt && !isPaymentLinkExpired(link.paymentLinkExpiresAt));
-    if (activeLink) throw new ConflictException('The existing payment link is still active');
-    if (link.checkoutUrl && !link.paymentLinkDeactivatedAt) await this.deactivatePaymentLink(orderId, link.providerReference ?? link.checkoutUrl, 'order_recreate');
-
-    const pricingSnapshot = this.buildPriceSnapshot(source);
-    const items = source.items.map((item) => ({
-      sku: String(item.sku), productId: String(item.productId), variantId: item.variantId ? String(item.variantId) : undefined,
-      quantity: Number(item.quantity), blonde: Boolean(item.blonde), weightGrams: Number(item.weightContributionGrams ?? 0) / Number(item.quantity),
-      lengthInches: item.lengthIn ? Number(item.lengthIn) : undefined,
-    }));
-    const canonicalRequest = {
-      currency: source.currency.toUpperCase(),
-      customerName: source.customerName?.trim() || undefined,
-      customerContact: source.customerContact?.trim() || undefined,
-      expoDiscountEnabled: false,
-      items: items.map((item) => ({ ...item, blonde: item.blonde === true })),
-    };
-    const operationId = randomUUID();
-    const now = new Date().toISOString();
-    const requestJson = JSON.stringify({ ...canonicalRequest, sourceOrderId: orderId, pricingSnapshot });
-    const requestHash = checkoutRequestHash(canonicalJson(canonicalRequest));
-    this.database.connection.transaction(() => {
-      this.database.connection.prepare(`
-        INSERT INTO checkout_operations
-          (id, actor_id, operation_type, client_idempotency_key, request_hash, request_json, status, created_at, updated_at)
-        VALUES (?, 'booth-recreate', 'order_recreate', ?, ?, ?, 'received', ?, ?)
-      `).run(operationId, randomUUID(), requestHash, requestJson, now, now);
-      this.audit.record({ action: 'ORDER_RECREATE_STARTED', entityType: 'order', entityId: orderId, source: 'order_recreate', correlationId: operationId, metadata: { operationId } });
-    })();
-    return this.checkoutCore.process(operationId);
-  }
-
   markPaid(orderId: string, checkoutSessionId: string | null, paymentIntentId: string | null, paymentLinkId: string | null, source: string): void {
     this.database.connection.transaction(() => {
       const before = this.database.connection.prepare('SELECT status FROM orders WHERE id = ?').get(orderId) as { status: string } | undefined;
@@ -267,39 +219,6 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
       const updated = this.database.connection.prepare('UPDATE orders SET stripe_payment_link_deactivated_at = ?, updated_at = ? WHERE id = ? AND stripe_payment_link_deactivated_at IS NULL').run(now, now, orderId);
       if (updated.changes === 1) this.audit.record({ action: 'PAYMENT_LINK_DEACTIVATED', entityType: 'order', entityId: orderId, source, metadata: { paymentLinkId } });
     })();
-  }
-
-  private buildPriceSnapshot(source: {
-    currency: string; totalAmountMinor: number; totalCnyMinor: number; subtotalMinor: number; subtotalCnyMinor: number;
-    surchargeMinor: number; surchargeCnyMinor: number; discountMinor: number; discountCnyMinor: number; totalWeightGrams: number;
-    selectedDiscountReason: string | null; items: Array<Record<string, unknown>>; adjustments: Array<Record<string, unknown>>;
-  }): PriceSnapshot {
-    return {
-      currency: source.currency,
-      lines: source.items.map((item, index) => ({
-        itemRef: `item-${index + 1}`, productId: String(item.productId), variantId: item.variantId ? String(item.variantId) : undefined,
-        quantity: Number(item.quantity), unitPriceMinor: Number(item.adjustedUnitAmountMinor), unitPriceCnyMinor: Number(item.adjustedUnitAmountCnyMinor),
-        baseUnitPriceMinor: Number(item.baseUnitAmountMinor), baseUnitPriceCnyMinor: Number(item.baseUnitAmountCnyMinor),
-        adjustedUnitPriceMinor: Number(item.adjustedUnitAmountMinor), adjustedUnitPriceCnyMinor: Number(item.adjustedUnitAmountCnyMinor),
-        lineTotalMinor: Number(item.lineTotalMinor), lineTotalCnyMinor: Number(item.lineTotalCnyMinor),
-        weightContributionGrams: Number(item.weightContributionGrams ?? 0), blonde: Boolean(item.blonde), sku: String(item.sku),
-        line: item.line ? String(item.line) : undefined, productType: item.productType ? String(item.productType) : undefined,
-        lengthIn: item.lengthIn ? String(item.lengthIn) : null, unit: item.unit ? String(item.unit) : undefined,
-        packWeightGrams: Number(item.weightContributionGrams ?? 0) / Number(item.quantity),
-      })),
-      subtotalMinor: source.subtotalMinor, subtotalCnyMinor: source.subtotalCnyMinor,
-      adjustments: source.adjustments.map((adjustment) => ({
-        code: String(adjustment.code), label: String(adjustment.label), type: String(adjustment.type) as 'SURCHARGE' | 'DISCOUNT',
-        scope: String(adjustment.scope) as 'ITEM' | 'ORDER', itemRef: adjustment.itemRef ? String(adjustment.itemRef) : undefined,
-        amountMinor: Number(adjustment.amountMinor), amountCnyMinor: Number(adjustment.amountCnyMinor ?? adjustment.amountMinor), ruleVersion: String(adjustment.ruleVersion),
-        metadata: adjustment.metadata as Readonly<Record<string, unknown>> | undefined,
-      })),
-      totalMinor: source.totalAmountMinor, totalCnyMinor: source.totalCnyMinor, surchargeMinor: source.surchargeMinor,
-      surchargeCnyMinor: source.surchargeCnyMinor, discountMinor: source.discountMinor, discountCnyMinor: source.discountCnyMinor,
-      totalWeightGrams: source.totalWeightGrams,
-      selectedDiscountReason: source.selectedDiscountReason === 'EXPO_DISCOUNT' || source.selectedDiscountReason === 'VOLUME_DISCOUNT' ? source.selectedDiscountReason : null,
-      ruleVersion: String(source.adjustments[0]?.ruleVersion ?? 'trunov-pricing-v1'),
-    };
   }
 
   private assertDate(value: string): void {
