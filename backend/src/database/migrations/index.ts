@@ -10,6 +10,7 @@ import { finalOrderSnapshotMigration } from './009-final-order-snapshot';
 import { paymentHardeningMigration } from './010-payment-hardening';
 import { processingClaimTokenMigration } from './011-processing-claim-token';
 import { orderRecreationAndPaymentExpiryMigration } from './012-order-recreation-and-payment-expiry';
+import { backfillPaymentLinkExpiryMigration } from './013-backfill-payment-link-expiry';
 
 // Add each new migration here in ascending order.
-export const migrations = [initialMigration, checkoutOperationScopeMigration, checkoutProcessingMigration, mockVerticalSchemaMigration, operationStatusConstraintMigration, pricingVersionMigration, catalogFixturesMigration, realCatalogSchemaMigration, finalOrderSnapshotMigration, paymentHardeningMigration, processingClaimTokenMigration, orderRecreationAndPaymentExpiryMigration];
+export const migrations = [initialMigration, checkoutOperationScopeMigration, checkoutProcessingMigration, mockVerticalSchemaMigration, operationStatusConstraintMigration, pricingVersionMigration, catalogFixturesMigration, realCatalogSchemaMigration, finalOrderSnapshotMigration, paymentHardeningMigration, processingClaimTokenMigration, orderRecreationAndPaymentExpiryMigration, backfillPaymentLinkExpiryMigration];

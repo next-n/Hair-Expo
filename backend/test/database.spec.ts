@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseService } from '../src/database/database.service';
+import { backfillPaymentLinkExpiryMigration } from '../src/database/migrations/013-backfill-payment-link-expiry';
 
 describe('database initialization', () => {
   let directory: string;
@@ -36,7 +37,7 @@ describe('database initialization', () => {
     service.onModuleInit();
     service.onModuleInit();
     expect(service.connection.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get())
-      .toEqual({ count: 12 });
+      .toEqual({ count: 13 });
   });
 
   it('enforces foreign keys and keeps pragmas after reopening the file', () => {
@@ -99,6 +100,35 @@ describe('migration schema constraints', () => {
     insert.run('order-stripe-b', 'EXPO-B', now, now);
     service.connection.prepare('UPDATE orders SET stripe_checkout_session_id = ? WHERE id = ?').run('cs_test_unique', 'order-stripe-a');
     expect(() => service.connection.prepare('UPDATE orders SET stripe_checkout_session_id = ? WHERE id = ?').run('cs_test_unique', 'order-stripe-b')).toThrow();
+    service.onModuleDestroy();
+  });
+
+  it('backfills a 24-hour expiry for legacy unpaid payment links only', () => {
+    const service = new DatabaseService(':memory:');
+    service.onModuleInit();
+    const createdAt = '2026-01-01T00:00:00.000Z';
+    const operationId = 'legacy-expiry-operation';
+    const orderId = 'legacy-expiry-order';
+    const attemptId = 'legacy-expiry-attempt';
+    service.connection.prepare(`INSERT INTO orders
+      (id, order_number, status, currency, total_amount_minor, created_at, updated_at)
+      VALUES (?, ?, 'pending', 'USD', 100, ?, ?)`).run(orderId, 'EXPO-LEGACY', createdAt, createdAt);
+    service.connection.prepare(`INSERT INTO checkout_operations
+      (id, actor_id, operation_type, client_idempotency_key, request_hash, request_json, status, order_id, created_at, updated_at)
+      VALUES (?, ?, 'checkout_intake', ?, ?, '{}', 'completed', ?, ?, ?)`).run(operationId, 'legacy-booth', 'legacy-key', 'legacy-hash', orderId, createdAt, createdAt);
+    service.connection.prepare(`INSERT INTO checkout_attempts
+      (id, checkout_operation_id, attempt_number, provider_name, status, checkout_url, created_at, updated_at)
+      VALUES (?, ?, 1, 'stripe', 'completed', ?, ?, ?)`).run(attemptId, operationId, 'https://checkout.stripe.test/legacy', createdAt, createdAt);
+
+    backfillPaymentLinkExpiryMigration.up(service.connection);
+
+    expect(service.connection.prepare('SELECT payment_link_created_at AS createdAt, payment_link_expires_at AS expiresAt FROM checkout_attempts WHERE id = ?').get(attemptId))
+      .toEqual({ createdAt, expiresAt: '2026-01-02T00:00:00.000Z' });
+    service.connection.prepare('UPDATE orders SET status = \'paid\' WHERE id = ?').run(orderId);
+    service.connection.prepare('UPDATE checkout_attempts SET payment_link_created_at = NULL, payment_link_expires_at = NULL WHERE id = ?').run(attemptId);
+    backfillPaymentLinkExpiryMigration.up(service.connection);
+    expect(service.connection.prepare('SELECT payment_link_created_at AS createdAt, payment_link_expires_at AS expiresAt FROM checkout_attempts WHERE id = ?').get(attemptId))
+      .toEqual({ createdAt: null, expiresAt: null });
     service.onModuleDestroy();
   });
 });
