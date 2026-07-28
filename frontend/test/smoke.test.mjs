@@ -11,6 +11,7 @@ test('frontend application entrypoint exists', async () => {
   assert.match(page, /mergeCartItems/);
   assert.match(page, /productSearchRank/);
   assert.match(page, /CHECKOUT_KEY/);
+  assert.doesNotMatch(page, /checkout\.checkoutUrl} target="_blank"/);
 });
 
 test('order status route exists', async () => {
@@ -22,6 +23,7 @@ test('order status route exists', async () => {
   assert.match(page, /REORDER_DISCOUNT_KEY/);
   assert.doesNotMatch(page, /api\.recreateOrder/);
   assert.match(page, /t\('reorder'\)/);
+  assert.doesNotMatch(page, /order\.checkoutUrl!} target="_blank"/);
 });
 
 test('orders list route exists', async () => {

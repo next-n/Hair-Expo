@@ -175,7 +175,7 @@ export default function OrderPage() {
               <h2>{t('paymentPending')}</h2>
               <p className="muted">{t('statusConfirmedWebhook')}</p>
               <div className="order-payment-actions">
-                <a className="button" href={order.checkoutUrl!} target="_blank" rel="noreferrer">{t('openStripeCheckout')}</a>
+                <a className="button" href={order.checkoutUrl!}>{t('openStripeCheckout')}</a>
                 <button className="button secondary" onClick={() => void loadOrder(true)}>{t('refreshPaymentStatus')}</button>
                 <button className="button secondary" onClick={createCheckoutDraftFromOrder}>{t('reorder')}</button>
               </div>
