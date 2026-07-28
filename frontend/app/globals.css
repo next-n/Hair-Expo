@@ -82,6 +82,8 @@ input, select { width: 100%; border: 1px solid var(--line); border-radius: 9px; 
 .order-identity { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 30px 0 22px; }
 .order-identity > div > span { display: block; font-size: 13px; }
 .order-identity h1 { margin: 6px 0 0; font-size: clamp(32px, 6vw, 54px); line-height: 1; letter-spacing: -.04em; overflow-wrap: anywhere; }
+.order-identity-meta { display: grid; justify-items: end; gap: 7px; }
+.order-created-at { color: var(--muted); font-size: 14px; font-weight: 600; }
 .order-status-badge { display: inline-flex; align-items: center; min-height: 34px; padding: 7px 12px; border-radius: 99px; font-size: 13px; font-weight: 700; white-space: nowrap; }
 .order-status-badge.paid { color: #027a48; background: #ecfdf3; }
 .order-status-badge.pending { color: #b54708; background: #fff8e7; }
@@ -136,6 +138,7 @@ input, select { width: 100%; border: 1px solid var(--line); border-radius: 9px; 
   .order-detail-actions { justify-content: flex-start; width: 100%; }
   .order-detail-actions .button { flex: 1; }
   .order-identity { align-items: flex-start; flex-direction: column; gap: 13px; padding: 24px 0 18px; }
+  .order-identity-meta { justify-items: start; }
   .order-summary-card { align-items: flex-start; flex-direction: column; gap: 17px; padding: 18px; }
   .order-total-block { justify-items: start; }
   .order-detail-grid { grid-template-columns: 1fr; }

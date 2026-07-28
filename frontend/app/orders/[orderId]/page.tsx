@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { api } from '../../../lib/api';
 import { COMPANY_DETAILS, COMPANY_NAME } from '../../../lib/company';
-import { formatMinor, LanguageSwitcher, localizeError, useI18n } from '../../../lib/i18n';
+import { formatDate, formatMinor, LanguageSwitcher, localizeError, useI18n } from '../../../lib/i18n';
 import { printInvoice } from '../../../lib/invoice';
 import { CartItem, Order } from '../../../lib/types';
 import { PaymentLinkCountdown } from '../../../components/payment-link-countdown';
@@ -108,7 +108,7 @@ export default function OrderPage() {
             <span className="muted">{t('orderStatus')}</span>
             <h1>{order ? order.orderNumber : t('orderStatus')}</h1>
           </div>
-          {order && <span className={`order-status-badge ${isPaid ? 'paid' : 'pending'}`}>{paymentLabel}</span>}
+          {order && <div className="order-identity-meta"><span className={`order-status-badge ${isPaid ? 'paid' : 'pending'}`}>{paymentLabel}</span><time className="order-created-at" dateTime={order.createdAt}>{formatDate(order.createdAt, locale)}</time></div>}
         </div>
 
         {loading && <p className="muted">{t('loadingOrderStatus')}</p>}

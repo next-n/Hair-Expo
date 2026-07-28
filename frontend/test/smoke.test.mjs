@@ -21,6 +21,7 @@ test('order status route exists', async () => {
   assert.match(page, /createCheckoutDraftFromOrder/);
   assert.match(page, /localStorage\.setItem\(CART_KEY/);
   assert.match(page, /REORDER_DISCOUNT_KEY/);
+  assert.match(page, /formatDate\(order\.createdAt/);
   assert.doesNotMatch(page, /api\.recreateOrder/);
   assert.match(page, /t\('reorder'\)/);
   assert.doesNotMatch(page, /order\.checkoutUrl!} target="_blank"/);
