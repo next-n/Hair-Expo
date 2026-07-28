@@ -35,6 +35,8 @@ test('orders list route exists', async () => {
   assert.match(page, /company-link/);
   assert.match(page, /customerSearch/);
   assert.match(page, /loading-spinner/);
+  assert.match(page, /pageshow/);
+  assert.match(page, /pagehide/);
 });
 
 test('supported locales include Burmese', async () => {

@@ -40,6 +40,23 @@ export default function OrdersPage() {
 
   useEffect(() => { void loadOrders(); }, [loadOrders]);
 
+  useEffect(() => {
+    const resetNavigationState = () => {
+      setOpeningOrderId(null);
+      setBusy(false);
+    };
+    const restoreOrdersPage = () => {
+      resetNavigationState();
+      void loadOrders();
+    };
+    window.addEventListener('pageshow', restoreOrdersPage);
+    window.addEventListener('pagehide', resetNavigationState);
+    return () => {
+      window.removeEventListener('pageshow', restoreOrdersPage);
+      window.removeEventListener('pagehide', resetNavigationState);
+    };
+  }, [loadOrders]);
+
   const visibleOrders = useMemo(() => {
     const query = customerSearch.trim().toLocaleLowerCase(locale);
     if (!query) return orders;
