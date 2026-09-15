@@ -1,4 +1,4 @@
-:root { color-scheme: light; --ink: #17202a; --muted: #667085; --line: #e4e7ec; --accent: #7a3df0; --soft: #f7f5ff; }
+:root { color-scheme: light; --ink: #17202a; --muted: #667085; --line: #e4e7ec; --accent: lab(42.13% -25.42 44.78); --soft: #f7f5ff; }
 * { box-sizing: border-box; }
 body { margin: 0; background: #f7f8fa; color: var(--ink); font-family: Arial, sans-serif; }
 button, input, select { font: inherit; }
