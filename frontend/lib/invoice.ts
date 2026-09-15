@@ -33,14 +33,53 @@ function itemQuantityLabel(item: OrderItem, locale: Locale, t: (key: Parameters<
   return `${item.quantity}`;
 }
 
+function cleanItemName(
+  item: OrderItem,
+  locale: Locale,
+  t: (key: Parameters<typeof message>[1], values?: Record<string, string | number>) => string,
+  money: (minor: number | null | undefined, currency: string, locale: Locale) => string,
+): string {
+  const rawName = item.name ?? item.line ?? item.productType ?? '';
+  const isGram = item.unit === 'per_100g' || item.unit === 'per_kg';
+  const isPiece = item.unit === 'pack_100pcs' || item.unit === 'pack_20pcs';
+  if (!isGram && !isPiece) return rawName;
+  const cleaned = rawName
+    .replace(/\s*per\s*100\s*g\s*$/i, '')
+    .replace(/\s*per\s*kg\s*$/i, '')
+    .replace(/\s*pack of \d+\s*$/i, '')
+    .trim();
+  const unitPrice = item.adjustedUnitAmountMinor;
+  const unitLabel = isGram ? t('gramsUnit') : t('piecesUnit');
+  return unitPrice != null ? `${cleaned} · ${money(unitPrice, 'USD', locale)} / ${unitLabel}` : cleaned;
+}
+
 const rows = items.length > 0
   ? items.map((item) => {
       const isBlonde = item.blonde === 1 || item.blonde === true;
-      const skuLabel = isBlonde ? `${item.sku} · ${text('blonde')}` : item.sku;
+      const isGram = item.unit === 'per_100g' || item.unit === 'per_kg';
+      const isPiece = item.unit === 'pack_100pcs' || item.unit === 'pack_20pcs';
+      const qtyLabel = isGram && item.weightContributionGrams != null
+        ? `${new Intl.NumberFormat(locale).format(item.weightContributionGrams)} ${text('gramsUnit')}`
+        : isPiece && item.piecesCount != null && item.piecesCount > 0
+          ? `${new Intl.NumberFormat(locale).format(item.piecesCount)} ${text('piecesUnit')}`
+          : null;
+      const skuLabel = [item.sku, isBlonde ? text('blonde') : null, qtyLabel].filter(Boolean).join(' · ');
+      const productCell = (() => {
+        const rawName = item.line ?? item.productType ?? '';
+        if (!isGram && !isPiece) return rawName;
+        const cleaned = rawName
+          .replace(/\s*per\s*100\s*g\s*$/i, '')
+          .replace(/\s*per\s*kg\s*$/i, '')
+          .replace(/\s*pack of \d+\s*$/i, '')
+          .trim();
+        const unitPrice = item.adjustedUnitAmountMinor;
+        const unitLabel = isGram ? text('gramsUnit') : text('piecesUnit');
+        return unitPrice != null ? `${cleaned} · ${money(unitPrice, currency, locale)} / ${unitLabel}` : cleaned;
+      })();
       return `<tr>
         <td>${escapeHtml(skuLabel)}</td>
-        <td>${escapeHtml(item.line ?? item.productType ?? '')}</td>
-        <td>${itemQuantityLabel(item, locale, text)}</td>
+        <td>${escapeHtml(productCell)}</td>
+        <td>${isGram || isPiece ? '—' : item.quantity}</td>
         <td>${item.weightContributionGrams == null ? '—' : `${new Intl.NumberFormat(locale).format(item.weightContributionGrams)} g`}</td>
         <td>${money(item.lineTotalMinor, currency, locale)}</td>
       </tr>`;

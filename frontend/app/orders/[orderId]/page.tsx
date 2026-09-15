@@ -160,29 +160,43 @@ export default function OrderPage() {
             <div className="order-detail-item-list">
               {items.map((item, index) => {
                 const isBlonde = item.blonde === 1 || item.blonde === true;
+                const isGram = item.unit === 'per_100g' || item.unit === 'per_kg';
+                const isPiece = item.unit === 'pack_100pcs' || item.unit === 'pack_20pcs';
+                const qtyLabel = isGram && item.weightContributionGrams != null
+                  ? `${new Intl.NumberFormat(locale).format(item.weightContributionGrams)} ${t('gramsUnit')}`
+                  : isPiece && item.piecesCount != null && item.piecesCount > 0
+                    ? `${new Intl.NumberFormat(locale).format(item.piecesCount)} ${t('piecesUnit')}`
+                    : null;
                 return (
                   <div className="order-detail-item" key={`${item.sku}-${index}`}>
                     <div className="order-item-copy">
-                      <strong>{item.sku}{isBlonde && <> · {t('blonde')}</>}</strong>
-                      <span className="muted">{item.name || item.line || item.productType || ''}</span>
-                      <div className="order-item-meta">
-                        {item.unit === 'per_100g' || item.unit === 'per_kg' ? (
-                          item.weightContributionGrams != null && (
+                      <strong>
+                        {item.sku}
+                        {isBlonde && <> · {t('blonde')}</>}
+                        {qtyLabel && <> · {qtyLabel}</>}
+                      </strong>
+                      <span className="muted">
+                        {(() => {
+                          const rawName = item.name || item.line || item.productType || '';
+                          if (!isGram && !isPiece) return rawName;
+                          const cleaned = rawName
+                            .replace(/\s*per\s*100\s*g\s*$/i, '')
+                            .replace(/\s*per\s*kg\s*$/i, '')
+                            .replace(/\s*pack of \d+\s*$/i, '')
+                            .trim();
+                          const unitPrice = item.adjustedUnitAmountMinor;
+                          const unitLabel = isGram ? t('gramsUnit') : t('piecesUnit');
+                          return unitPrice != null ? `${cleaned} · ${money(unitPrice, order.currency)} / ${unitLabel}` : cleaned;
+                        })()}
+                      </span>
+                      {!isGram && !isPiece && (
+                        <div className="order-item-meta">
+                          <span>{item.quantity} {t('invoiceQuantity').toLowerCase()}</span>
+                          {item.weightContributionGrams != null && item.weightContributionGrams > 0 && (
                             <span>{new Intl.NumberFormat(locale).format(item.weightContributionGrams)} {t('gramsUnit')}</span>
-                          )
-                        ) : item.unit === 'pack_100pcs' || item.unit === 'pack_20pcs' ? (
-                          item.piecesCount != null && item.piecesCount > 0 && (
-                            <span>{new Intl.NumberFormat(locale).format(item.piecesCount)} {t('piecesUnit')}</span>
-                          )
-                        ) : (
-                          <>
-                            <span>{item.quantity} {t('invoiceQuantity').toLowerCase()}</span>
-                            {item.weightContributionGrams != null && item.weightContributionGrams > 0 && (
-                              <span>{new Intl.NumberFormat(locale).format(item.weightContributionGrams)} {t('gramsUnit')}</span>
-                            )}
-                          </>
-                        )}
-                      </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <strong>{money(item.lineTotalMinor, order.currency)}</strong>
                   </div>
