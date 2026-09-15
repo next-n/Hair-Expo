@@ -1,7 +1,6 @@
-import { Order } from './types';
 import { COMPANY_DETAILS, COMPANY_NAME } from './company';
 import { formatDate, formatMinor, message, Locale } from './i18n';
-
+import { Order, OrderItem } from './types';
 function escapeHtml(value: string): string {
   return value.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character] ?? character);
 }
@@ -18,19 +17,7 @@ export function printInvoice(order: Order, locale: Locale = 'en'): void {
   const status = order.paymentStatus === 'paid' ? text('paid') : order.paymentStatus === 'review_required' ? text('reviewRequired') : text('pending');
   const discountLabel = order.selectedDiscountReason === 'VOLUME_DISCOUNT' ? text('volumeDiscount') : order.selectedDiscountReason === 'EXPO_DISCOUNT' ? text('expoDiscount') : text('discount');
   const items = order.items ?? [];
-  function itemQuantityLabel(item: OrderItem, locale: Locale, t: (key: Parameters<typeof message>[1], values?: Record<string, string | number>) => string): string {
-  if (item.unit === 'per_100g' || item.unit === 'per_kg') {
-    return item.weightContributionGrams != null
-      ? `${new Intl.NumberFormat(locale).format(item.weightContributionGrams)} ${t('gramsUnit')}`
-      : '—';
-  }
-  if (item.unit === 'pack_100pcs' || item.unit === 'pack_20pcs') {
-    return item.piecesCount != null && item.piecesCount > 0
-      ? `${new Intl.NumberFormat(locale).format(item.piecesCount)} ${t('piecesUnit')}`
-      : '—';
-  }
-  return `${item.quantity}`;
-}
+  
 
 function itemQuantityLabel(item: OrderItem, locale: Locale, t: (key: Parameters<typeof message>[1], values?: Record<string, string | number>) => string): string {
   if (item.unit === 'per_100g' || item.unit === 'per_kg') {

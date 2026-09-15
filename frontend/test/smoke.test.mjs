@@ -65,10 +65,12 @@ test('guide presents the technology stack', async () => {
 test('invoice includes the backend pricing breakdown', async () => {
   const invoice = await readFile(new URL('../lib/invoice.ts', import.meta.url), 'utf8');
   assert.match(invoice, /selectedDiscountReason/);
-  assert.match(invoice, /discountMinor/);
-  assert.match(invoice, /invoiceSurcharge/);
+  assert.match(invoice, /adjustments/);
+  assert.match(invoice, /adjustment\.scope === 'ORDER'/);
   assert.match(invoice, /cnyReference/);
   assert.match(invoice, /weightContributionGrams/);
+  assert.match(invoice, /piecesCount/);
+  assert.match(invoice, /itemQuantityLabel/);
   assert.doesNotMatch(invoice, /totalWeightGrams == null/);
 });
 
