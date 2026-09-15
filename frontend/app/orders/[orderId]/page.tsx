@@ -158,27 +158,45 @@ export default function OrderPage() {
           <section className="order-info-card order-items-card">
             <div className="order-card-heading"><h2>{t('items')}</h2><span className="order-card-tag">{items.length}</span></div>
             <div className="order-detail-item-list">
-              {items.map((item, index) => <div className="order-detail-item" key={`${item.sku}-${index}`}>
-                <div className="order-item-copy">
-                  <strong>{item.sku}</strong>
-                  <span className="muted">{item.name || item.line || item.productType || ''}</span>
-                  <div className="order-item-meta">
-                    <span>{item.quantity} {t('invoiceQuantity').toLowerCase()}</span>
-                    {item.piecesCount != null && item.piecesCount > 0 && <span>{new Intl.NumberFormat(locale).format(item.piecesCount)} {t('piecesUnit')}</span>}
-                    {item.weightContributionGrams != null && item.weightContributionGrams > 0 && <span>{new Intl.NumberFormat(locale).format(item.weightContributionGrams)} g</span>}
+              {items.map((item, index) => {
+                const isBlonde = item.blonde === 1 || item.blonde === true;
+                return (
+                  <div className="order-detail-item" key={`${item.sku}-${index}`}>
+                    <div className="order-item-copy">
+                      <strong>{item.sku}{isBlonde && <> · {t('blonde')}</>}</strong>
+                      <span className="muted">{item.name || item.line || item.productType || ''}</span>
+                      <div className="order-item-meta">
+                        {item.unit === 'per_100g' || item.unit === 'per_kg' ? (
+                          item.weightContributionGrams != null && (
+                            <span>{new Intl.NumberFormat(locale).format(item.weightContributionGrams)} {t('gramsUnit')}</span>
+                          )
+                        ) : item.unit === 'pack_100pcs' || item.unit === 'pack_20pcs' ? (
+                          item.piecesCount != null && item.piecesCount > 0 && (
+                            <span>{new Intl.NumberFormat(locale).format(item.piecesCount)} {t('piecesUnit')}</span>
+                          )
+                        ) : (
+                          <>
+                            <span>{item.quantity} {t('invoiceQuantity').toLowerCase()}</span>
+                            {item.weightContributionGrams != null && item.weightContributionGrams > 0 && (
+                              <span>{new Intl.NumberFormat(locale).format(item.weightContributionGrams)} {t('gramsUnit')}</span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <strong>{money(item.lineTotalMinor, order.currency)}</strong>
                   </div>
-                </div>
-                <strong>{money(item.lineTotalMinor, order.currency)}</strong>
-              </div>)}
+                );
+              })}
             </div>
             <div className="order-pricing">
               <div className="total-row"><span>{t('subtotal')}</span><strong>{money(order.subtotalMinor, order.currency)}</strong></div>
-              {order.adjustments && order.adjustments.length > 0 && <div className="order-adjustment-list">
-                {order.adjustments.map((adjustment, index) => <div className="total-row order-adjustment-row" key={`${adjustment.code}-${index}`}>
-                  <span>{adjustment.label}</span>
-                  <strong className={adjustment.type === 'DISCOUNT' ? 'discount-amount' : ''}>{adjustment.type === 'DISCOUNT' ? '−' : '+'}{money(adjustment.amountMinor, order.currency)}</strong>
-                </div>)}
-              </div>}
+                        {order.adjustments && order.adjustments.filter((adjustment) => adjustment.scope === 'ORDER').length > 0 && <div className="order-adjustment-list">
+            {order.adjustments.filter((adjustment) => adjustment.scope === 'ORDER').map((adjustment, index) => <div className="total-row order-adjustment-row" key={`${adjustment.code}-${index}`}>
+              <span>{adjustment.label}</span>
+              <strong className={adjustment.type === 'DISCOUNT' ? 'discount-amount' : ''}>{adjustment.type === 'DISCOUNT' ? '−' : '+'}{money(adjustment.amountMinor, order.currency)}</strong>
+            </div>)}
+          </div>}
               <div className="total-row order-grand-total"><span>{t('total')}</span><strong>{money(order.totalAmountMinor, order.currency)}</strong></div>
             </div>
           </section>

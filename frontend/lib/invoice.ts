@@ -18,13 +18,50 @@ export function printInvoice(order: Order, locale: Locale = 'en'): void {
   const status = order.paymentStatus === 'paid' ? text('paid') : order.paymentStatus === 'review_required' ? text('reviewRequired') : text('pending');
   const discountLabel = order.selectedDiscountReason === 'VOLUME_DISCOUNT' ? text('volumeDiscount') : order.selectedDiscountReason === 'EXPO_DISCOUNT' ? text('expoDiscount') : text('discount');
   const items = order.items ?? [];
-  const rows = items.length > 0
-    ? items.map((item) => `<tr><td>${escapeHtml(item.sku)}</td><td>${escapeHtml(item.line ?? item.productType ?? '')}</td><td>${item.quantity}</td><td>${item.piecesCount && item.piecesCount > 0 ? `${item.piecesCount} pcs` : item.quantity}</td><td>${item.weightContributionGrams == null ? '—' : `${new Intl.NumberFormat(locale).format(item.weightContributionGrams)} g`}</td><td>${money(item.lineTotalMinor, currency, locale)}</td></tr>`).join('')
-    : `<tr><td colspan="5">${text('customerDetailsUnavailable')}</td></tr>`;
+  function itemQuantityLabel(item: OrderItem, locale: Locale, t: (key: Parameters<typeof message>[1], values?: Record<string, string | number>) => string): string {
+  if (item.unit === 'per_100g' || item.unit === 'per_kg') {
+    return item.weightContributionGrams != null
+      ? `${new Intl.NumberFormat(locale).format(item.weightContributionGrams)} ${t('gramsUnit')}`
+      : '—';
+  }
+  if (item.unit === 'pack_100pcs' || item.unit === 'pack_20pcs') {
+    return item.piecesCount != null && item.piecesCount > 0
+      ? `${new Intl.NumberFormat(locale).format(item.piecesCount)} ${t('piecesUnit')}`
+      : '—';
+  }
+  return `${item.quantity}`;
+}
+
+function itemQuantityLabel(item: OrderItem, locale: Locale, t: (key: Parameters<typeof message>[1], values?: Record<string, string | number>) => string): string {
+  if (item.unit === 'per_100g' || item.unit === 'per_kg') {
+    return item.weightContributionGrams != null
+      ? `${new Intl.NumberFormat(locale).format(item.weightContributionGrams)} ${t('gramsUnit')}`
+      : '—';
+  }
+  if (item.unit === 'pack_100pcs' || item.unit === 'pack_20pcs') {
+    return item.piecesCount != null && item.piecesCount > 0
+      ? `${new Intl.NumberFormat(locale).format(item.piecesCount)} ${t('piecesUnit')}`
+      : '—';
+  }
+  return `${item.quantity}`;
+}
+
+const rows = items.length > 0
+  ? items.map((item) => {
+      const isBlonde = item.blonde === 1 || item.blonde === true;
+      const skuLabel = isBlonde ? `${item.sku} · ${text('blonde')}` : item.sku;
+      return `<tr>
+        <td>${escapeHtml(skuLabel)}</td>
+        <td>${escapeHtml(item.line ?? item.productType ?? '')}</td>
+        <td>${itemQuantityLabel(item, locale, text)}</td>
+        <td>${item.weightContributionGrams == null ? '—' : `${new Intl.NumberFormat(locale).format(item.weightContributionGrams)} g`}</td>
+        <td>${money(item.lineTotalMinor, currency, locale)}</td>
+      </tr>`;
+    }).join('')
+  : `<tr><td colspan="5">${text('customerDetailsUnavailable')}</td></tr>`;
   const summaryRows = [
     order.subtotalMinor == null ? '' : `<tr><td>${text('subtotal')}</td><td>${money(order.subtotalMinor, currency, locale)}</td></tr>`,
-    order.surchargeMinor && order.surchargeMinor > 0 ? `<tr><td>${text('invoiceSurcharge')}</td><td>${money(order.surchargeMinor, currency, locale)}</td></tr>` : '',
-    order.discountMinor && order.discountMinor > 0 ? `<tr><td>${escapeHtml(discountLabel)}</td><td>−${money(order.discountMinor, currency, locale)}</td></tr>` : '',
+    ...(order.adjustments ?? []).filter((adjustment) => adjustment.scope === 'ORDER').map((adjustment) => `<tr><td>${escapeHtml(adjustment.label)}</td><td>${adjustment.type === 'DISCOUNT' ? '−' : '+'}${money(adjustment.amountMinor, currency, locale)}</td></tr>`),
     `<tr class="grand-total"><td>${text('usdTotal')}</td><td>${money(order.totalAmountMinor, currency, locale)}</td></tr>`,
     order.totalCnyMinor == null ? '' : `<tr><td>${text('cnyReference')}</td><td>${money(order.totalCnyMinor, 'CNY', locale)}</td></tr>`,
   ].join('');
