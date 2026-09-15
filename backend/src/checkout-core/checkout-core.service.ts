@@ -108,12 +108,32 @@ export class CheckoutCoreService {
         for (const [index, line] of pricing.lines.entries()) {
           const source = request.items[index];
           const productId = this.database.connection.prepare('SELECT id FROM products WHERE id = ?').get(source.productId) ? source.productId : null;
-          insertItem.run(randomUUID(), orderId, productId, line.variantId ?? source.variantId ?? null, line.sku ?? source.sku ?? source.productId, line.productType ?? line.sku ?? source.productId, line.quantity,
-            line.adjustedUnitPriceMinor, request.currency, line.lineTotalMinor,
-            JSON.stringify({ color: source.color, requestedWeightGrams: source.weightGrams, requestedLengthInches: source.lengthInches }), now,
-            line.line, line.productType, line.lengthIn ?? source.lengthInches?.toString() ?? null, line.unit,
-            line.weightContributionGrams, line.blonde ? 1 : 0, line.baseUnitPriceMinor, line.baseUnitPriceCnyMinor,
-            line.adjustedUnitPriceMinor, line.adjustedUnitPriceCnyMinor, line.lineTotalCnyMinor);
+          insertItem.run(
+            randomUUID(),
+            orderId,
+            productId,
+            line.variantId ?? source.variantId ?? null,
+            line.sku ?? source.sku ?? source.productId,
+            line.productType ?? line.sku ?? source.productId,
+            line.quantity,
+            line.adjustedUnitPriceMinor,
+            request.currency,
+            line.lineTotalMinor,
+            JSON.stringify({ color: source.color, requestedWeightGrams: source.weightGrams, requestedPieces: source.pieces, requestedLengthInches: source.lengthInches }),
+            now,
+            line.line,
+            line.productType,
+            line.lengthIn ?? source.lengthInches?.toString() ?? null,
+            line.unit,
+            line.weightContributionGrams,
+            line.pieceContribution,           // ← NEW — was missing
+            line.blonde ? 1 : 0,
+            line.baseUnitPriceMinor,
+            line.baseUnitPriceCnyMinor,
+            line.adjustedUnitPriceMinor,
+            line.adjustedUnitPriceCnyMinor,
+            line.lineTotalCnyMinor,
+          );
         }
         const insertAdjustment = this.database.connection.prepare(`
           INSERT INTO pricing_adjustments (id, checkout_operation_id, order_id, order_item_id, code, label, type, scope, item_ref, amount_minor, amount_cny_minor, rule_version, metadata_json, created_at)

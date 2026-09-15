@@ -148,27 +148,42 @@ To add or replace a translation, update the message dictionaries in `frontend/li
 
 The supplied CSV is stored unchanged at `backend/data/trunov_price_list.csv`. On startup, `CatalogImportService` validates the exact required columns, supported units, positive prices, nullable Trial Pack fields, exactly 75 rows, and unique SKUs. It computes a SHA-256 checksum and creates or reuses a price-list version. Importing is transactional and idempotent; restarting the app does not duplicate products. USD prices are stored in cents and CNY prices in fen. A later source file produces a new checksum/version and preserves existing order snapshots.
 
+The CSV continues to hold the pack-level price (for example `$85.00` for `per_100g`, `$35.00` for `pack_20pcs`). `CatalogService` derives per-gram (`pricePerGramUsdMinor`, `pricePerGramCnyMinor`) and per-piece (`pricePerPieceUsdMinor`, `pricePerPieceCnyMinor`) values on the fly and returns them to the frontend for display. Fixed `pack` items return `null` for both derived fields. Migration `015-piece-count` adds the `order_items.pieces_count` column so a saved order can restore the exact piece count on reorder.
+
 ## Pricing rules
 
 Pricing is backend-only. Controllers, the frontend, and payment providers do not calculate authoritative totals.
 
+Units are sold by three mechanisms, chosen by the CSV `unit` column:
+
+- `per_100g` and `per_kg` — sold by weight. The unit price is derived from the CSV pack price (`÷100` or `÷1000`) and multiplied by the requested weight in grams. The cart seeds 100 g for `per_100g` and 1,000 g for `per_kg`; the booth operator adjusts weight with a ±50 g stepper.
+- `pack_100pcs` and `pack_20pcs` — sold by piece. The unit price is derived from the CSV pack price (`÷100` or `÷20`) and multiplied by the requested piece count. The cart seeds a full pack (100 or 20 pieces) and the booth operator adjusts with a ±10 piece stepper.
+- `pack` — sold as a fixed bundle. The CSV price is charged per pack and the booth operator adjusts the pack quantity with a ±1 stepper. Trial Pack is the only current `pack` item.
+
 The deterministic pipeline is:
 
 1. Load the product and immutable USD/CNY price snapshot from SQLite.
-2. Calculate base line totals and weight contributions. `per_kg` contributes 1,000 g per unit. Missing Trial Pack weight contributes 0 g until clarified.
-3. Apply item-level blonde surcharge: 3,000 basis points (30%) to the selected line before quantity multiplication.
-4. Calculate the subtotal after item surcharges.
-5. Select one order discount: volume (1,000 basis points) wins at 10,000 g or more; otherwise Expo (1,000 basis points) applies when enabled by default.
-6. Apply deterministic integer half-up rounding in cents/fen.
-7. Clamp USD and CNY reference totals at zero and return an immutable price snapshot.
+2. Branch by unit and calculate base line totals:
+   - `per_100g` → `round(packPrice / 100) × weightGrams`
+   - `per_kg` → `round(packPrice / 1000) × weightGrams`
+   - `pack_100pcs` → `round(packPrice / 100) × pieces`
+   - `pack_20pcs` → `round(packPrice / 20) × pieces`
+   - `pack` → `packPrice × quantity`
+     When a weight or piece count is omitted, the engine falls back to `packWeightGrams × quantity` or `packSize × quantity` so legacy callers still price correctly.
+3. Contribute to cart weight: per-gram items contribute their weight; per-piece items contribute `packWeightGrams × ceil(pieces / packSize)`; pack items contribute `packWeightGrams × quantity`. Trial Pack's missing weight contributes 0 g.
+4. Apply item-level blonde surcharge: 3,000 basis points (30%) applied to the weighted or pieced line total, not the raw pack price, so partial quantities are priced correctly.
+5. Calculate the subtotal after item surcharges.
+6. Select one order discount: volume (1,000 basis points) wins at 10,000 g or more; otherwise Expo (1,000 basis points) applies when enabled by default.
+7. Apply deterministic integer half-up rounding in cents/fen.
+8. Clamp USD and CNY reference totals at zero and return an immutable price snapshot.
 
 USD is the Stripe source amount. CNY is a reference/display amount calculated independently from the supplied CNY catalog prices; it is not an exchange-rate conversion. The selected discount reason is persisted with the order and adjustments. Trial Pack is currently included in the eligible subtotal, and its missing weight is treated as zero as required by the current brief.
 
-The exact brief example is covered by `backend/test/trunov-pricing.spec.ts`: 2 × SD-KT-22 with one blonde line plus 3 × RAW-MM-24 produces USD `$2,502.00` and CNY `¥17,514.00` after Expo discount.
+The exact brief example is covered by `backend/test/trunov-pricing.spec.ts`: 2 × SD-KT-22 with one blonde line plus 3 × RAW-MM-24 produces USD `$2,502.00` and CNY `¥17,514.00` after Expo discount. Per-gram and per-piece behavior is covered by `backend/test/pricing.spec.ts`.
 
 ## Checkout and idempotency
 
-The frontend keeps one UUID idempotency key per checkout intention in local storage. It reuses that key after a timeout, reconnect, or duplicate click. Only “New order” clears it. The backend canonicalizes customer data, item identities/SKUs, quantities, blonde flags, and Expo toggle, hashes the representation with SHA-256, and enforces `(actor/session, operation type, idempotency key)` uniqueness in SQLite.
+The frontend keeps one UUID idempotency key per checkout intention in local storage. It reuses that key after a timeout, reconnect, or duplicate click. Only “New order” clears it. The backend canonicalizes customer data, item identities/SKUs, quantities, weights, piece counts, blonde flags, and Expo toggle, hashes the representation with SHA-256, and enforces `(actor/session, operation type, idempotency key)` uniqueness in SQLite. Because weight and piece count participate in the hash, a cart with the same SKU at 100 g and 250 g produces two distinct idempotency intents and cannot accidentally collapse into one.
 
 Local writes are short transactions. The checkout operation/order/price snapshot is committed before any Stripe call. Stripe calls use stable keys:
 
@@ -221,7 +236,7 @@ For HTTPS deployment, use `deploy/nginx-hair-expo.conf` as the certificate/boots
 
 ## Frontend workflow
 
-The main screen supports catalog search with relevance ranking (SKU matches first, then product name/type and substring matches), one-click normal/blonde additions, merging of identical product/variant/option lines, separate normal and blonde lines, editable quantities, quantity steppers, Expo toggle, backend preview, customer name/contact, QR code from the returned Stripe URL, retry, and New Order. The cart, customer draft, discount toggle, and current idempotency key survive refresh and offline periods. The frontend displays backend results only; it does not reproduce pricing rules.
+The main screen supports catalog search with relevance ranking (SKU matches first, then product name/type and substring matches), one-click normal/blonde additions, merging of identical product/variant/option lines, separate normal and blonde lines, and unit-aware cart controls: a weight stepper (±50 g) for `per_100g` / `per_kg` items, a piece stepper (±10) for `pack_100pcs` / `pack_20pcs` items, and a quantity stepper (±1) for fixed `pack` items. Each numeric input shows its unit (`g` or `pcs`) as a small label outside the field so tablets still render the number keypad and the row width stays stable. The catalog card shows the derived unit price (`$0.85 per gram`, `$1.75 per piece`) next to the reference pack price. The screen also supports the Expo toggle, backend preview, customer name/contact, QR code from the returned Stripe URL, retry, and New Order. The cart, customer draft, discount toggle, and current idempotency key survive refresh and offline periods. The frontend displays backend results only; it does not reproduce pricing rules.
 
 The Orders screen can filter by Paid, Pending, or All, search customer names, and filter by calendar dates (the date fields expand to complete local calendar days; there are no time-of-day controls). Each order has a detail page; order-number and `View order` navigation show a short loading state before opening the detail page. Every order can use `Reorder` to prefill the checkout cart with the same customer, product variants, quantities, blonde selections, and Expo-discount selection. This action only prepares a checkout draft; it does not copy payment status or create a new payment link until the booth operator reviews and submits it. Pending orders still reuse their existing QR while it is active, and expired links show an expired state. The original order remains unchanged in all cases; paid orders are immutable and can also be printed as invoices. Legacy order snapshots missing variant IDs are resolved from their saved SKU when details are loaded, so historical paid orders remain reorderable.
 
@@ -243,11 +258,11 @@ npm run lint
 npm run build
 ```
 
-The backend tests cover the 75-product import, exact assignment calculation, non-stacking discounts, missing Trial Pack fields, duplicate intake, concurrent processing, lease recovery, provider boundaries, webhook deactivation, migrations, and immutable deterministic pricing. Stripe tests should use mocked provider boundaries; a real test payment still requires the manual Stripe setup above.
+The backend tests cover the 75-product import, exact assignment calculation, non-stacking discounts, missing Trial Pack fields, duplicate intake, concurrent processing, lease recovery, provider boundaries, webhook deactivation, migrations, immutable deterministic pricing, per-gram pricing (`per_100g` and `per_kg`), per-piece pricing (`pack_100pcs` and `pack_20pcs`), blonde surcharge on weighted and pieced line totals, mixed pack/weight/piece carts, and volume-discount thresholds.
 
 ## AI Workflow and Verification
 
-OpenAI Codex was used as the coding assistant for this repository. Cursor, Claude Code, and GitHub Copilot were not used. AI-generated code was treated as a draft: the implementation was reviewed against the assignment, the confirmed architecture, and the payment-safety requirements before it was kept.
+OpenAI Codex and DeepSeek were used as coding assistants for this repository. Cursor, Claude Code, and GitHub Copilot were not used. AI-generated code was treated as a draft: the implementation was reviewed against the assignment, the confirmed architecture, and the payment-safety requirements before it was kept. DeepSeek was used for collaborative changes in a chat interface; Codex was used for in-repository generation and review. Both were subject to the same verification standard.
 
 Examples of prompts used during the project included:
 
@@ -274,6 +289,35 @@ Examples of prompts used during the project included:
    > CORS currently accepts reflected origins with credentials. Cookies also lack the Secure flag, while the included Nginx configuration only listens on HTTP. Before public deployment: allow only the frontend domain, add Secure to production cookies, enable HTTPS and HTTP-to-HTTPS redirect, and rate-limit passcode attempts.
    >
 
+DeepSeek was used during the unit-based pricing work to design, patch, and review the changes that let the same checkout sell fixed packs, per-100g, per-kg, and per-piece items in the same cart. Its output was reviewed line-by-line before being applied, and its suggestions were rejected when they conflicted with the payment-safety requirements or the existing pricing-rule contract. Examples of prompts used with DeepSeek included:
+
+1. “Change the cart so per-gram and per-piece items use a weight or piece stepper instead of a quantity, and keep pack items on the existing quantity stepper.”
+2. “Given this `DefaultPricingEngine`, add a branch for `pack_100pcs` and `pack_20pcs` that prices per piece, without breaking the existing `per_kg` and `per_100g` fallback behavior.”
+3. “The Stripe payment link is created from a single aggregated line item. Confirm whether the checkout-core transaction needs to change to support per-piece items, or only the `order_items` INSERT and the pricing engine.”
+4. “Review this `insertItem.run(...)` call for a parameter-order mismatch against the INSERT column list. The CI error is `RangeError: Too few parameter values were provided`.”
+5. “Update the README's Pricing rules and Frontend workflow sections to describe weight and piece steppers without changing the payment-safety claims.”
+6. “List every place in the backend and frontend that must change when adding a new checkout unit (`pack_100pcs`, `pack_20pcs`) besides the pricing engine, so nothing is missed in the DTO, canonical request, migration, or reorder flow.”
+
+Where DeepSeek's output was kept:
+
+- The three-branch `DefaultPricingEngine` (gram, piece, pack) with fallbacks to `packWeightGrams × quantity` and `packSize × quantity` when the caller omits the new fields.
+- The `CatalogService` helpers `calculatePricePerGram` and `calculatePricePerPiece`, plus the matching fields on `CatalogProduct`.
+- The migration `015-piece-count` and the corresponding `pieces_count` column on `order_items`.
+- The `pieces` field threading through `checkout-intake.dto.ts`, `order-preview.dto.ts`, `canonical-request.ts`, and `checkout-core.service.ts`.
+- The frontend `CartItem` shape, `mergeCartItems`, the weight and piece steppers, and the `unit-suffix` label outside each numeric input.
+- The README updates for unit-based pricing.
+
+Where DeepSeek's output was corrected or rejected:
+
+- The initial engine patch used a strict branch that required `weightGrams` on `per_kg` items, which broke `trunov-pricing.spec.ts`; it was replaced with the current fallback to `packWeightGrams × quantity` so existing callers keep working.
+- A test expectation for the blonde surcharge on weighted lines was wrong (`subtotalMinor` after item-level adjustments, not the base line total); the test was corrected, not the engine.
+- Two CI failures caused by real drift between the edited file and the committed file (`line.pieceContribution` missing from the `insertItem.run(...)` call; `requestedPieces` missing from the snapshot JSON) were fixed by aligning the file with the intended state and re-running the suite.
+- A `pieces should not exist` validation error was traced to missing `pieces` fields on the DTOs and fixed by adding the field rather than relaxing `forbidNonWhitelisted` on the global `ValidationPipe`.
+
+DeepSeek did not invent pricing, refund, settlement, or catalog rules. Where the brief was silent — for example, whether a `per_kg` item requires a whole-kg quantity, or whether Trial Pack weight should be treated as non-zero — the behavior is documented as an assumption or left behind a replaceable boundary.
+
+
+
 Verification included:
 
 - Reviewing migrations, SQLite constraints, transaction boundaries, lease fencing, provider calls, canonical request construction, and webhook handling.
@@ -283,7 +327,7 @@ Verification included:
 - Checking production health, HTTPS redirects, exact CORS behavior, container status, and the absence of committed secrets.
 - Correcting issues found during verification, including a Nest provider-construction issue, a foreign-key ordering/reference issue, an outdated fake-provider idempotency assertion, and the production webhook/web-boundary hardening gaps above.
 
-No unconfirmed pricing, catalog, refund, or settlement rules were invented. Where the assignment was silent, the behavior remains documented as an assumption or is kept behind a replaceable boundary.
+No unconfirmed pricing, catalog, refund, or settlement rules were invented by any assistant. Where the assignment was silent, the behavior remains documented as an assumption or is kept behind a replaceable boundary.
 
 ## Screen-recording checklist
 
