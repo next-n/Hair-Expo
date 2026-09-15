@@ -87,7 +87,7 @@ export default function OrdersPage() {
     <main className="shell">
       <header className="topbar">
         <div><p className="status"><a className="company-link" href="/">{COMPANY_NAME}</a> · {t('boothCheckout')}</p><p className="muted">{COMPANY_DETAILS}</p><h1 className="brand">{t('orders')}</h1></div>
-        <div className="top-actions"><LanguageSwitcher /><a className="button secondary" href="/">{t('backToCheckout')}</a><button className="button secondary" disabled={busy} onClick={() => void loadOrders()}>{t('reload')}</button></div>
+        <div className="top-actions"><LanguageSwitcher /><a className="button secondary" href="/reports">{t('reports')}</a><a className="button secondary" href="/">{t('backToCheckout')}</a><button className="button secondary" disabled={busy} onClick={() => void loadOrders()}>{t('reload')}</button></div>
       </header>
       <section className="panel orders-panel">
         <div className="product-row"><div><h2>{t('soldOrders')}</h2><p className="muted">{t('paidTotal', { amount: money(paidTotal, 'USD') })}</p></div></div>

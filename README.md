@@ -103,6 +103,7 @@ STRIPE_WEBHOOK_SECRET=whsec_...
 FRONTEND_URL=http://localhost:4421
 CORS_ALLOWED_ORIGINS=http://localhost:4421
 APP_PASSCODE=change-me
+REPORT_TIMEZONE=Asia/Shanghai
 AUTH_MAX_ATTEMPTS=5
 AUTH_RATE_LIMIT_WINDOW_SECONDS=900
 CATALOG_CSV_PATH=./data/trunov_price_list.csv
@@ -133,6 +134,12 @@ NEXT_PUBLIC_GUIDE_URL=https://guide.guangzhouhairexpo.asia
 Invoice company details are public frontend configuration, not secrets. Change these values in `frontend/.env.local` and restart the frontend before printing new invoices. `NEXT_PUBLIC_GUIDE_URL` controls the checkout page's link to the public guide; it falls back to the local `/guide` route when unset. Booth staff do not edit company identity per order.
 
 `/guide` is a public, static project guide and tutorial page. It does not call the backend, create checkout operations, load orders, or poll payment status. `NEXT_PUBLIC_GUIDE_VIDEO_URL` is an optional public link to the five-minute screen recording; leave it empty to show the reserved video placeholder. The live checkout link remains protected by the booth passcode, which should be sent to reviewers separately rather than placed in the page or repository.
+
+## Event and monthly sales reports
+
+The protected `/reports` page creates a saved sales report for an event or any date range. The operator enters an event name and inclusive start/end dates; the backend calculates the report from paid orders and immutable order snapshots. Paid totals use the durable payment-confirmation timestamp, while pending and expired counts use orders created in the selected range. Reports include paid order count, gross subtotal, surcharges, discounts, final paid total, units, weight, CNY reference total, pending/expired counts, and a SKU/product/variant breakdown. A generated snapshot is stored in SQLite so the printed report and CSV export remain reproducible.
+
+`REPORT_TIMEZONE` controls the date boundaries and defaults to `Asia/Shanghai`. The frontend never aggregates or recalculates money. CSV exports include integer USD minor-unit and CNY minor-unit columns; the print view formats those backend amounts for people. The report endpoint is protected by the same booth passcode as Orders.
 
 For production on `guide.guangzhouhairexpo.asia`, set `NEXT_PUBLIC_GUIDE_CHECKOUT_URL=https://checkout.guangzhouhairexpo.asia` in the frontend deployment environment so the guide's checkout links leave the guide host. The repository includes `deploy/nginx-guide-https.conf`, which proxies the public guide host to the static Next.js `/guide` route, caches guide HTML and assets, and rate-limits requests per client IP.
 
@@ -215,6 +222,7 @@ For HTTPS deployment, use `deploy/nginx-hair-expo.conf` as the certificate/boots
 - `GET /catalog/products?search=...`
 - `POST /orders/preview`
 - `GET /orders?status=all|paid|pending&from=<ISO>&to=<ISO>`, `GET /orders/:id`, `POST /orders/:id/refresh`
+- `POST /reports/sales`, `GET /reports/:reportId`
 - `GET /checkout-intake/session`, `POST /checkout-intake`
 - `POST /checkout/:operationId/process`, `GET /checkout/:operationId`
 - `POST /webhooks/stripe`
@@ -256,6 +264,7 @@ Examples of prompts used during the project included:
 3. The real-production hardening review:
 
    > Remaining real-production concerns
+   >
    > 1. Validate payment amount in the webhook
    >
    > The webhook verifies Stripe’s signature and checks that the session is paid, but it does not compare:
@@ -271,6 +280,7 @@ Examples of prompts used during the project included:
    > 3. Harden the web boundary
    >
    > CORS currently accepts reflected origins with credentials. Cookies also lack the Secure flag, while the included Nginx configuration only listens on HTTP. Before public deployment: allow only the frontend domain, add Secure to production cookies, enable HTTPS and HTTP-to-HTTPS redirect, and rate-limit passcode attempts.
+   >
 
 Verification included:
 

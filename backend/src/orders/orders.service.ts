@@ -56,7 +56,7 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
     const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
     const orders = this.database.connection.prepare(`
       SELECT id, order_number AS orderNumber, customer_name AS customerName,
-        customer_contact AS customerContact, created_at AS createdAt, currency,
+        customer_contact AS customerContact, created_at AS createdAt, paid_at AS paidAt, currency,
         total_amount_minor AS totalAmountMinor, total_cny_minor AS totalCnyMinor,
         subtotal_amount_minor AS subtotalMinor, surcharge_amount_minor AS surchargeMinor,
         discount_amount_minor AS discountMinor, subtotal_cny_minor AS subtotalCnyMinor,
@@ -74,7 +74,7 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
   get(orderId: string) {
     const order = this.database.connection.prepare(`
       SELECT id, order_number AS orderNumber, customer_name AS customerName,
-        customer_contact AS customerContact, created_at AS createdAt, currency,
+        customer_contact AS customerContact, created_at AS createdAt, paid_at AS paidAt, currency,
         total_amount_minor AS totalAmountMinor, total_cny_minor AS totalCnyMinor,
         subtotal_amount_minor AS subtotalMinor, surcharge_amount_minor AS surchargeMinor,
         discount_amount_minor AS discountMinor, subtotal_cny_minor AS subtotalCnyMinor,
@@ -134,15 +134,17 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
   }
 
   markPaid(orderId: string, checkoutSessionId: string | null, paymentIntentId: string | null, paymentLinkId: string | null, source: string): void {
+    const now = new Date().toISOString();
     this.database.connection.transaction(() => {
       const before = this.database.connection.prepare('SELECT status FROM orders WHERE id = ?').get(orderId) as { status: string } | undefined;
       if (!before) throw new NotFoundException('Order not found');
       if (before.status === 'paid') return;
       const updated = this.database.connection.prepare(`
         UPDATE orders SET status = 'paid', stripe_checkout_session_id = COALESCE(?, stripe_checkout_session_id),
-          stripe_payment_intent_id = COALESCE(?, stripe_payment_intent_id), stripe_payment_link_id = COALESCE(?, stripe_payment_link_id), updated_at = ?
+          stripe_payment_intent_id = COALESCE(?, stripe_payment_intent_id), stripe_payment_link_id = COALESCE(?, stripe_payment_link_id),
+          paid_at = COALESCE(paid_at, ?), updated_at = ?
         WHERE id = ? AND status IN ('pending', 'review_required')
-      `).run(checkoutSessionId, paymentIntentId, paymentLinkId, new Date().toISOString(), orderId);
+      `).run(checkoutSessionId, paymentIntentId, paymentLinkId, now, now, orderId);
       if (updated.changes !== 1) {
         const current = this.database.connection.prepare('SELECT status FROM orders WHERE id = ?').get(orderId) as { status: string } | undefined;
         if (current?.status === 'paid') return;

@@ -1,4 +1,4 @@
-import { CartItem, CheckoutResponse, Order, PricePreview, Product } from './types';
+import { CartItem, CheckoutResponse, Order, PricePreview, Product, SalesReport } from './types';
 
 const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:4423';
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -25,4 +25,6 @@ export const api = {
   },
   order: (id: string) => request<Order>(`/orders/${id}`),
   refreshOrder: (id: string) => request<Order>(`/orders/${id}/refresh`, { method: 'POST' }),
+  salesReport: (eventName: string, startDate: string, endDate: string) => request<SalesReport>('/reports/sales', { method: 'POST', body: JSON.stringify({ eventName, startDate, endDate }) }),
+  salesReportById: (reportId: string) => request<SalesReport>(`/reports/${reportId}`),
 };
