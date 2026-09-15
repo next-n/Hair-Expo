@@ -26,6 +26,12 @@ export class CheckoutIntakeItemDto {
   weightGrams?: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(CHECKOUT_LIMITS.maxPieces)
+  pieces?: number;
+
+  @IsOptional()
   @IsString()
   @MaxLength(CHECKOUT_LIMITS.maxColorLength)
   color?: string;

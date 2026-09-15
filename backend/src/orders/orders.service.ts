@@ -101,7 +101,8 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
         oi.adjusted_unit_amount_minor AS adjustedUnitAmountMinor,
         oi.adjusted_unit_amount_cny_minor AS adjustedUnitAmountCnyMinor,
         oi.line_total_amount_minor AS lineTotalMinor, oi.line_total_cny_minor AS lineTotalCnyMinor,
-        oi.weight_contribution_grams AS weightContributionGrams
+        oi.weight_contribution_grams AS weightContributionGrams,
+        oi.pieces_count AS piecesCount
       FROM order_items oi WHERE oi.order_id = ? ORDER BY oi.rowid
     `).all(orderId);
     const adjustments = this.database.connection.prepare(`

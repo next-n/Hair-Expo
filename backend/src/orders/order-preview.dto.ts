@@ -8,6 +8,7 @@ class PreviewItemDto {
   @IsOptional() @IsBoolean() blonde?: boolean;
   @IsInt() @Min(1) @Max(CHECKOUT_LIMITS.maxQuantity) quantity!: number;
   @IsOptional() @IsInt() @Min(0) @Max(CHECKOUT_LIMITS.maxWeightGrams) weightGrams?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(CHECKOUT_LIMITS.maxPieces) pieces?: number;
   @IsOptional() @IsString() @MaxLength(CHECKOUT_LIMITS.maxColorLength) color?: string;
   @IsOptional() @IsInt() @Min(0) @Max(CHECKOUT_LIMITS.maxLengthInches) lengthInches?: number;
 }

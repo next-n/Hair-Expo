@@ -7,19 +7,17 @@ export interface PricingItemInput {
   readonly productId: string;
   readonly variantId?: string;
   readonly quantity: number;
-  readonly weightGrams?: number;
-  readonly color?: string;
-  readonly lengthInches?: number;
   readonly baseUnitPriceMinor: number;
   readonly baseUnitPriceCnyMinor?: number;
+  readonly weightGrams?: number;
+  readonly pieces?: number;
+  readonly packWeightGrams?: number;
+  readonly lengthInches?: number;
   readonly blonde?: boolean;
-  readonly sku?: string;
-  readonly line?: string;
-  readonly productType?: string;
-  readonly lengthIn?: string | null;
-  readonly unit?: string;
-  readonly packWeightGrams?: number | null;
-  readonly productTags?: readonly string[];
+  readonly sku?: string;          // ← was required, now optional
+  readonly line?: string;         // ← was required, now optional
+  readonly productType?: string;  // ← was required, now optional
+  readonly unit?: string;         // ← was required, now optional
 }
 
 export interface PricingInput {
@@ -42,6 +40,7 @@ export interface PricingLine {
   readonly lineTotalMinor: number;
   readonly lineTotalCnyMinor: number;
   readonly weightContributionGrams: number;
+  readonly pieceContribution: number; 
   readonly blonde: boolean;
   readonly sku?: string;
   readonly line?: string;

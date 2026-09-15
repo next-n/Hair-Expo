@@ -15,21 +15,51 @@ const CUSTOMER_KEY = 'hair-expo-customer';
 const CHECKOUT_KEY = 'hair-expo-checkout-result';
 const REORDER_DISCOUNT_KEY = 'hair-expo-reorder-expo-discount';
 const REORDER_NOTICE_KEY = 'hair-expo-reorder-notice';
+const WEIGHT_STEP_GRAMS = 50;
+const PIECES_STEP = 10;
 
 type StoredCheckout = { requestKey: string; response: CheckoutResponse };
 type StoredIntent = { key: string; requestKey: string };
 
+function isGramUnit(unit: string | null | undefined): boolean {
+  return unit === 'per_100g' || unit === 'per_kg';
+}
+
+function defaultWeightForUnit(unit: string): number {
+  return unit === 'per_kg' ? 1000 : 100;
+}
+function isPieceUnit(unit: string | null | undefined): boolean {
+  return unit === 'pack_100pcs' || unit === 'pack_20pcs';
+}
+
+function defaultPiecesForUnit(unit: string): number {
+  return unit === 'pack_20pcs' ? 20 : 100;
+}
 function mergeCartItems(items: readonly CartItem[]): CartItem[] {
   const merged: CartItem[] = [];
   for (const item of items) {
-    const index = merged.findIndex((existing) => existing.productId === item.productId && existing.variantId === item.variantId && Boolean(existing.blonde) === Boolean(item.blonde));
+    const index = merged.findIndex((existing) =>
+      existing.productId === item.productId &&
+      existing.variantId === item.variantId &&
+      Boolean(existing.blonde) === Boolean(item.blonde) &&
+      isGramUnit(existing.unit) === isGramUnit(item.unit) &&
+      isPieceUnit(existing.unit) === isPieceUnit(item.unit)
+    );
     if (index === -1) {
       merged.push({ ...item });
       continue;
     }
     const existing = merged[index];
-    const quantity = existing.quantity + item.quantity;
-    merged[index] = { ...existing, quantity: Number.isSafeInteger(quantity) ? quantity : Number.MAX_SAFE_INTEGER };
+    if (isGramUnit(existing.unit)) {
+      const weight = (existing.weightGrams ?? 0) + (item.weightGrams ?? 0);
+      merged[index] = { ...existing, weightGrams: Number.isSafeInteger(weight) ? weight : 100_000 };
+    } else if (isPieceUnit(existing.unit)) {
+      const pieces = (existing.pieces ?? 0) + (item.pieces ?? 0);
+      merged[index] = { ...existing, pieces: Number.isSafeInteger(pieces) ? pieces : 100_000 };
+    } else {
+      const quantity = existing.quantity + item.quantity;
+      merged[index] = { ...existing, quantity: Number.isSafeInteger(quantity) ? quantity : Number.MAX_SAFE_INTEGER };
+    }
   }
   return merged;
 }
@@ -63,6 +93,8 @@ export default function HomePage() {
   const [expoDiscountEnabled, setExpoDiscountEnabled] = useState(true);
   const [quantity, setQuantity] = useState(1);
   const [quantityDrafts, setQuantityDrafts] = useState<Record<number, string>>({});
+  const [weightDrafts, setWeightDrafts] = useState<Record<number, string>>({});
+  const [piecesDrafts, setPiecesDrafts] = useState<Record<number, string>>({});
   const [blonde, setBlonde] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -77,12 +109,17 @@ export default function HomePage() {
   const scrollToPaymentResultRef = useRef(false);
 
   const visibleProducts = useMemo(() => products.map((product, index) => ({ product, index, rank: productSearchRank(product, search.trim().toLowerCase()) })).filter((result): result is { product: Product; index: number; rank: number } => result.rank !== null).sort((left, right) => left.rank - right.rank || left.index - right.index).map((result) => result.product), [products, search]);
-  const cartCount = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
+  const cartCount = useMemo(() => cart.length, [cart]);
   const linePreview = (index: number) => preview?.lines[index];
   const visibleOrders = useMemo(() => orderFilter === 'paid' ? orders.filter((order) => order.paymentStatus === 'paid') : orderFilter === 'pending' ? orders.filter((order) => order.paymentStatus !== 'paid') : orders, [orderFilter, orders]);
   const currentRequestKey = useMemo(() => JSON.stringify({
     currency: 'USD', customerName, customerContact, expoDiscountEnabled,
-    items: cart.map(({ productId, variantId, quantity: itemQuantity, blonde: itemBlonde }) => ({ productId, variantId, quantity: itemQuantity, blonde: itemBlonde })),
+    items: cart.map(({ productId, variantId, quantity: itemQuantity, weightGrams, pieces, blonde: itemBlonde }) => ({
+      productId, variantId, quantity: itemQuantity,
+      ...(weightGrams !== undefined ? { weightGrams } : {}),
+      ...(pieces !== undefined ? { pieces } : {}),
+      blonde: itemBlonde,
+    })),
   }), [cart, customerName, customerContact, expoDiscountEnabled]);
   const checkoutLocked = Boolean(checkout?.checkoutUrl);
   const money = (minor: number | null | undefined, currency: string) => formatMinor(minor, currency, locale);
@@ -158,13 +195,31 @@ export default function HomePage() {
   }, [checkout?.checkoutUrl]);
 
   const unlock = async () => { setBusy(true); setError(''); try { await api.unlock(passcode); setUnlocked(true); await api.session(); setProducts(await api.products()); } catch (e) { setError(localizeError(e, t)); } finally { setBusy(false); } };
-  const add = (product = visibleProducts[0], isBlonde = blonde) => {
-    if (checkoutLocked || !product || product.variants.length === 0) return;
-    const variant = product.variants[0];
-    setCart((current) => mergeCartItems([...current, { productId: product.id, variantId: variant.id, sku: product.sku, quantity, blonde: isBlonde }]));
-    setPreview(null); setCheckout(null); setBlonde(false); setQuantity(1);
+
+const add = (product = visibleProducts[0], isBlonde = blonde) => {
+  if (checkoutLocked || !product || product.variants.length === 0) return;
+  const variant = product.variants[0];
+  const gram = isGramUnit(product.unit);
+  const piece = isPieceUnit(product.unit);
+  const base = { productId: product.id, variantId: variant.id, sku: product.sku, blonde: isBlonde, unit: product.unit, packWeightGrams: product.packWeightGrams };
+  const item: CartItem = gram
+    ? { ...base, quantity: 1, weightGrams: defaultWeightForUnit(product.unit) }
+    : piece
+      ? { ...base, quantity: 1, pieces: defaultPiecesForUnit(product.unit) }
+      : { ...base, quantity };
+  setCart((current) => mergeCartItems([...current, item]));
+  setPreview(null); setCheckout(null); setBlonde(false); setQuantity(1);
+};
+  const remove = (index: number) => {
+    if (checkoutLocked) return;
+    setCart((current) => current.filter((_, itemIndex) => itemIndex !== index));
+    setQuantityDrafts({});
+    setWeightDrafts({});
+    setPiecesDrafts({});
+    setPreview(null);
+    setCheckout(null);
   };
-  const remove = (index: number) => { if (checkoutLocked) return; setCart((current) => current.filter((_, itemIndex) => itemIndex !== index)); setQuantityDrafts({}); setPreview(null); setCheckout(null); };
+
   const updateQuantity = (index: number, next: number) => {
     if (checkoutLocked) return;
     const safeQuantity = Number.isSafeInteger(next) ? Math.max(1, next) : 1;
@@ -185,7 +240,51 @@ export default function HomePage() {
     if (value === undefined) return;
     updateQuantity(index, Number(value));
   };
+
+  const updateWeight = (index: number, next: number) => {
+    if (checkoutLocked) return;
+    const safeWeight = Number.isSafeInteger(next) ? Math.max(1, next) : 1;
+    setCart((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, weightGrams: safeWeight } : item));
+    setWeightDrafts((current) => { if (!(index in current)) return current; const nextDrafts = { ...current }; delete nextDrafts[index]; return nextDrafts; });
+    setPreview(null);
+  };
+  const editWeight = (index: number, value: string) => {
+    if (checkoutLocked || !/^\d*$/.test(value)) return;
+    setWeightDrafts((current) => ({ ...current, [index]: value }));
+    if (value !== '') {
+      const next = Number(value);
+      if (Number.isSafeInteger(next) && next >= 1) updateWeight(index, next);
+    }
+  };
+  const commitWeight = (index: number) => {
+    const value = weightDrafts[index];
+    if (value === undefined) return;
+    updateWeight(index, Number(value));
+  };
+
+  const updatePieces = (index: number, next: number) => {
+    if (checkoutLocked) return;
+    const safePieces = Number.isSafeInteger(next) ? Math.max(1, next) : 1;
+    setCart((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, pieces: safePieces } : item));
+    setPiecesDrafts((current) => { if (!(index in current)) return current; const nextDrafts = { ...current }; delete nextDrafts[index]; return nextDrafts; });
+    setPreview(null);
+  };
+  const editPieces = (index: number, value: string) => {
+    if (checkoutLocked || !/^\d*$/.test(value)) return;
+    setPiecesDrafts((current) => ({ ...current, [index]: value }));
+    if (value !== '') {
+      const next = Number(value);
+      if (Number.isSafeInteger(next) && next >= 1) updatePieces(index, next);
+    }
+  };
+  const commitPieces = (index: number) => {
+    const value = piecesDrafts[index];
+    if (value === undefined) return;
+    updatePieces(index, Number(value));
+  };
+
   const previewCart = async () => { setBusy(true); setError(''); try { setPreview(await api.preview('USD', cart, expoDiscountEnabled)); } catch (e) { setError(localizeError(e, t)); } finally { setBusy(false); } };
+
   const refreshCheckoutStatus = async () => {
     if (!checkout?.orderId) return;
     setBusy(true); setError('');
@@ -215,7 +314,19 @@ export default function HomePage() {
   };
   const loadOrders = async () => { setShowOrders(true); setBusy(true); setError(''); try { setOrders(await api.orders()); } catch (e) { setError(localizeError(e, t)); } finally { setBusy(false); } };
   const printOrder = async (orderId: string) => { setBusy(true); setError(''); try { printInvoice(await api.order(orderId), locale); } catch (e) { setError(localizeError(e, t)); } finally { setBusy(false); } };
-  const newOrder = () => { setShowReorderCue(false); setCart([]); setQuantityDrafts({}); setPreview(null); setCheckout(null); setCheckoutRequestKey(null); setError(''); localStorage.removeItem(INTENT_KEY); localStorage.removeItem(CHECKOUT_KEY); };
+  const newOrder = () => {
+    setShowReorderCue(false);
+    setCart([]);
+    setQuantityDrafts({});
+    setWeightDrafts({});
+    setPiecesDrafts({});
+    setPreview(null);
+    setCheckout(null);
+    setCheckoutRequestKey(null);
+    setError('');
+    localStorage.removeItem(INTENT_KEY);
+    localStorage.removeItem(CHECKOUT_KEY);
+  };
   const clearCustomer = () => { setCustomerName(''); setCustomerContact(''); localStorage.removeItem(CUSTOMER_KEY); };
   const scrollToPayment = () => { setShowReorderCue(false); document.querySelector<HTMLElement>('.sticky')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
 
@@ -226,8 +337,40 @@ export default function HomePage() {
     <header className="topbar"><div><p className="status">{COMPANY_NAME} · {t('boothCheckout')}</p><h1 className="brand">{t('buildOrder')}</h1></div><div className="top-actions"><span className={online ? 'online' : 'offline'}>{online ? `● ${t('online')}` : `○ ${t('offlineCartSaved')}`}</span><LanguageSwitcher /><Link className="button secondary" href="/orders">{t('orders')}</Link></div></header>
     <div className="mobile-cart-jump"><button className="button secondary" onClick={newOrder}>{t('newOrder')}</button><button className={`button secondary${showReorderCue ? ' cart-jump-attention' : ''}`} aria-describedby={showReorderCue ? 'reorder-cart-hint' : undefined} onClick={scrollToPayment}>{t('cartJump')} <span aria-hidden="true">↓</span></button>{showReorderCue && <span id="reorder-cart-hint" className="sr-only" role="status">{t('reorderCartHint')}</span>}</div>
     <div className="grid">
-      <section className="panel"><div className="product-row"><div><h2>{t('catalog')}</h2><p className="muted">{t('catalogHint')}</p></div><span className="status">{t('productsCount', { count: visibleProducts.length })}</span></div><input aria-label={t('searchCatalog')} placeholder={t('searchCatalog')} value={search} onChange={(event) => setSearch(event.target.value)} /><div className="products catalog-results">{visibleProducts.map((product) => <article className="product" key={product.id}><div className="product-row"><div><strong>{product.sku}</strong><div className="muted">{product.line} · {product.productType} · {product.lengthIn ? `${product.lengthIn} in` : t('standard')}</div></div><strong>{money(product.priceUsdMinor, 'USD')}</strong></div><div className="product-row"><span className="muted">{product.unit} · {product.packWeightGrams ? `${new Intl.NumberFormat(locale).format(product.packWeightGrams)} g` : t('weightNotSupplied')}</span><button className="button" disabled={checkoutLocked} onClick={() => add(product, false)}>{t('addNormal')}</button></div><button className="button secondary" disabled={checkoutLocked} onClick={() => add(product, true)}>{t('addBlonde')}</button></article>)}</div></section>
-      <aside className="panel sticky"><div className="product-row"><div><h2>{t('cart', { count: cartCount })}</h2><p className="muted">{t('backendAuthoritative')}</p></div><button className="button secondary" onClick={newOrder}>{t('newOrder')}</button></div>{checkoutLocked && <p className="muted">{t('paymentLinkCreated')}</p>}<div className="cart">{cart.length === 0 ? <p className="muted">{t('addProduct')}</p> : cart.map((item, index) => <div className="cart-row" key={`${item.sku}-${index}`}><div><strong>{item.sku}</strong><div className="muted">{item.blonde ? t('blonde') : t('normal')}{linePreview(index) ? ` · ${money(linePreview(index)?.lineTotalMinor, 'USD')}` : ''}</div></div><div className="stepper"><button className="button secondary" disabled={checkoutLocked} onClick={() => updateQuantity(index, item.quantity - 1)}>−</button><input className="quantity-input" aria-label={`${t('invoiceQuantity')} ${item.sku}`} type="number" inputMode="numeric" min={1} step={1} disabled={checkoutLocked} value={quantityDrafts[index] ?? item.quantity} onChange={(event) => editQuantity(index, event.target.value)} onBlur={() => commitQuantity(index)} /><button className="button secondary" disabled={checkoutLocked} onClick={() => updateQuantity(index, item.quantity + 1)}>+</button><button className="button secondary" disabled={checkoutLocked} onClick={() => remove(index)}>{t('remove')}</button></div></div>)}</div><label className="toggle"><input type="checkbox" disabled={checkoutLocked} checked={expoDiscountEnabled} onChange={(event) => { setExpoDiscountEnabled(event.target.checked); setPreview(null); }} /> {t('expoDiscount')}</label><div className="customer"><div className="customer-heading"><h3>{t('customer')}</h3><button className="button secondary customer-clear" disabled={checkoutLocked || (!customerName && !customerContact)} onClick={clearCustomer}>{t('clearCustomer')}</button></div><label>{t('name')}<input disabled={checkoutLocked} value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder={t('optional')} /></label><label>{t('phoneContact')}<input disabled={checkoutLocked} value={customerContact} onChange={(event) => setCustomerContact(event.target.value)} placeholder={t('optional')} /></label></div>{error && <p className="error">{error}</p>}{preview && <div className="success"><div className="total-row"><span>{t('weight')}</span><strong>{new Intl.NumberFormat(locale).format(preview.totalWeightGrams)} g</strong></div><div className="total-row"><span>{t('subtotal')}</span><strong>{money(preview.subtotalMinor, 'USD')}</strong></div><div className="total-row"><span>{preview.selectedDiscountReason === 'VOLUME_DISCOUNT' ? t('volumeDiscount') : preview.selectedDiscountReason === 'EXPO_DISCOUNT' ? t('expoDiscount') : t('discount')}</span><strong>−{money(preview.discountMinor, 'USD')}</strong></div><div className="total-row total"><span>{t('usdTotal')}</span><strong>{money(preview.totalMinor, 'USD')}</strong></div><div className="total-row"><span>{t('cnyReference')}</span><strong>{money(preview.totalCnyMinor, 'CNY')}</strong></div></div>}<div className="actions"><button className="button secondary" disabled={!cart.length || busy || !online || checkoutLocked} onClick={previewCart}>{t('previewBackendPrice')}</button><button className="button" disabled={!cart.length || busy || !online || checkoutLocked} onClick={checkoutNow}>{busy ? t('creating') : checkout?.paymentStatus === 'paid' ? t('paidStartNewOrder') : checkout?.status === 'review_required' ? t('retryPaymentLink') : t('createPaymentLink')}</button></div><div className="checkout-guide-card"><span className="checkout-guide-icon" aria-hidden="true">?</span><div><strong>{t('projectGuide')}</strong><span>{t('projectGuideHint')}</span></div><a className="button secondary" href={GUIDE_URL}>{t('openGuide')}</a></div>{checkout?.checkoutUrl && <div className={`qr${checkout.paymentLinkExpired ? ' expired' : ''}`}><strong>{checkout.orderNumber} · {paymentStatusLabel(checkout.paymentStatus)}</strong>{checkout.paymentLinkExpired ? <><strong>{t('paymentLinkExpired')}</strong><span className="muted">{t('paymentLinkExpiredHint')}</span></> : <><QRCodeSVG value={checkout.checkoutUrl} size={220} includeMargin /><a href={checkout.checkoutUrl}>{t('openStripeCheckout')}</a></>}{checkout.paymentStatus !== 'paid' && !checkout.paymentLinkExpired && <button className="button secondary" disabled={busy} onClick={refreshCheckoutStatus}>{t('refreshPaymentStatus')}</button>}{checkout.paymentStatus === 'paid' && <button className="button secondary" disabled={busy} onClick={() => void printOrder(checkout.orderId!)}>{t('printPdf')}</button>}<span className="muted">{t('statusConfirmedWebhook')}</span></div>}</aside>
+      <section className="panel"><div className="product-row"><div><h2>{t('catalog')}</h2><p className="muted">{t('catalogHint')}</p></div><span className="status">{t('productsCount', { count: visibleProducts.length })}</span></div><input aria-label={t('searchCatalog')} placeholder={t('searchCatalog')} value={search} onChange={(event) => setSearch(event.target.value)} /><div className="products catalog-results">{visibleProducts.map((product) => <article className="product" key={product.id}><div className="product-row"><div><strong>{product.sku}</strong><div className="muted">{product.line} · {product.productType} · {product.lengthIn ? `${product.lengthIn} in` : t('standard')}</div></div><div>
+      <strong>{money(product.priceUsdMinor, 'USD')}</strong>
+      {isGramUnit(product.unit) && product.pricePerGramUsdMinor !== null && (
+        <div className="muted">{money(product.pricePerGramUsdMinor, 'USD')} {t('perGram')}</div>
+  )}
+  {isPieceUnit(product.unit) && product.pricePerPieceUsdMinor !== null && (
+    <div className="muted">{money(product.pricePerPieceUsdMinor, 'USD')} {t('perPiece')}</div>
+  )}
+</div></div><div className="product-row"><span className="muted">{product.unit} · {product.packWeightGrams ? `${new Intl.NumberFormat(locale).format(product.packWeightGrams)} g` : t('weightNotSupplied')}</span><button className="button" disabled={checkoutLocked} onClick={() => add(product, false)}>{t('addNormal')}</button></div><button className="button secondary" disabled={checkoutLocked} onClick={() => add(product, true)}>{t('addBlonde')}</button></article>)}</div></section>
+      <aside className="panel sticky"><div className="product-row"><div><h2>{t('cart', { count: cartCount })}</h2><p className="muted">{t('backendAuthoritative')}</p></div><button className="button secondary" onClick={newOrder}>{t('newOrder')}</button></div>{checkoutLocked && <p className="muted">{t('paymentLinkCreated')}</p>}<div className="cart">{cart.length === 0 ? <p className="muted">{t('addProduct')}</p> : cart.map((item, index) => {
+        const gram = isGramUnit(item.unit) && item.weightGrams !== undefined;
+        const piece = isPieceUnit(item.unit) && item.pieces !== undefined;
+        return <div className="cart-row" key={`${item.sku}-${index}`}><div><strong>{item.sku}</strong><div className="muted">
+        {item.blonde ? t('blonde') : t('normal')}
+        {gram ? ` · ${new Intl.NumberFormat(locale).format(item.weightGrams!)} ${t('gramsUnit')}` : ''}
+        {piece ? ` · ${new Intl.NumberFormat(locale).format(item.pieces!)} ${t('piecesUnit')}` : ''}
+        {linePreview(index) ? ` · ${money(linePreview(index)?.lineTotalMinor, 'USD')}` : ''}
+        </div></div><div className="stepper">
+  {gram ? <>
+    <button className="button secondary" disabled={checkoutLocked} onClick={() => updateWeight(index, Math.max(1, (item.weightGrams ?? 0) - WEIGHT_STEP_GRAMS))}>−</button>
+    <input className="quantity-input" aria-label={`${t('weightGramsLabel')} ${item.sku}`} type="number" inputMode="numeric" min={1} step={10} disabled={checkoutLocked} value={weightDrafts[index] ?? item.weightGrams} onChange={(event) => editWeight(index, event.target.value)} onBlur={() => commitWeight(index)} /><span className="unit-suffix">{t('gramsUnit')}</span>
+    <button className="button secondary" disabled={checkoutLocked} onClick={() => updateWeight(index, (item.weightGrams ?? 0) + WEIGHT_STEP_GRAMS)}>+</button>
+  </> : piece ? <>
+    <button className="button secondary" disabled={checkoutLocked} onClick={() => updatePieces(index, Math.max(1, (item.pieces ?? 0) - PIECES_STEP))}>−</button>
+    <input className="quantity-input" aria-label={`${t('piecesLabel')} ${item.sku}`} type="number" inputMode="numeric" min={1} step={1} disabled={checkoutLocked} value={piecesDrafts[index] ?? item.pieces} onChange={(event) => editPieces(index, event.target.value)} onBlur={() => commitPieces(index)} /><span className="unit-suffix">{t('piecesUnit')}</span>
+    <button className="button secondary" disabled={checkoutLocked} onClick={() => updatePieces(index, (item.pieces ?? 0) + PIECES_STEP)}>+</button>
+  </> : <>
+    <button className="button secondary" disabled={checkoutLocked} onClick={() => updateQuantity(index, item.quantity - 1)}>−</button>
+    <input className="quantity-input" aria-label={`${t('invoiceQuantity')} ${item.sku}`} type="number" inputMode="numeric" min={1} step={1} disabled={checkoutLocked} value={quantityDrafts[index] ?? item.quantity} onChange={(event) => editQuantity(index, event.target.value)} onBlur={() => commitQuantity(index)} />
+    <button className="button secondary" disabled={checkoutLocked} onClick={() => updateQuantity(index, item.quantity + 1)}>+</button>
+  </>}
+  <button className="button secondary" disabled={checkoutLocked} onClick={() => remove(index)}>{t('remove')}</button>
+</div></div>;
+      })}</div><label className="toggle"><input type="checkbox" disabled={checkoutLocked} checked={expoDiscountEnabled} onChange={(event) => { setExpoDiscountEnabled(event.target.checked); setPreview(null); }} /> {t('expoDiscount')}</label><div className="customer"><div className="customer-heading"><h3>{t('customer')}</h3><button className="button secondary customer-clear" disabled={checkoutLocked || (!customerName && !customerContact)} onClick={clearCustomer}>{t('clearCustomer')}</button></div><label>{t('name')}<input disabled={checkoutLocked} value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder={t('optional')} /></label><label>{t('phoneContact')}<input disabled={checkoutLocked} value={customerContact} onChange={(event) => setCustomerContact(event.target.value)} placeholder={t('optional')} /></label></div>{error && <p className="error">{error}</p>}{preview && <div className="success"><div className="total-row"><span>{t('weight')}</span><strong>{new Intl.NumberFormat(locale).format(preview.totalWeightGrams)} g</strong></div><div className="total-row"><span>{t('subtotal')}</span><strong>{money(preview.subtotalMinor, 'USD')}</strong></div><div className="total-row"><span>{preview.selectedDiscountReason === 'VOLUME_DISCOUNT' ? t('volumeDiscount') : preview.selectedDiscountReason === 'EXPO_DISCOUNT' ? t('expoDiscount') : t('discount')}</span><strong>−{money(preview.discountMinor, 'USD')}</strong></div><div className="total-row total"><span>{t('usdTotal')}</span><strong>{money(preview.totalMinor, 'USD')}</strong></div><div className="total-row"><span>{t('cnyReference')}</span><strong>{money(preview.totalCnyMinor, 'CNY')}</strong></div></div>}<div className="actions"><button className="button secondary" disabled={!cart.length || busy || !online || checkoutLocked} onClick={previewCart}>{t('previewBackendPrice')}</button><button className="button" disabled={!cart.length || busy || !online || checkoutLocked} onClick={checkoutNow}>{busy ? t('creating') : checkout?.paymentStatus === 'paid' ? t('paidStartNewOrder') : checkout?.status === 'review_required' ? t('retryPaymentLink') : t('createPaymentLink')}</button></div><div className="checkout-guide-card"><span className="checkout-guide-icon" aria-hidden="true">?</span><div><strong>{t('projectGuide')}</strong><span>{t('projectGuideHint')}</span></div><a className="button secondary" href={GUIDE_URL}>{t('openGuide')}</a></div>{checkout?.checkoutUrl && <div className={`qr${checkout.paymentLinkExpired ? ' expired' : ''}`}><strong>{checkout.orderNumber} · {paymentStatusLabel(checkout.paymentStatus)}</strong>{checkout.paymentLinkExpired ? <><strong>{t('paymentLinkExpired')}</strong><span className="muted">{t('paymentLinkExpiredHint')}</span></> : <><QRCodeSVG value={checkout.checkoutUrl} size={220} includeMargin /><a href={checkout.checkoutUrl}>{t('openStripeCheckout')}</a></>}{checkout.paymentStatus !== 'paid' && !checkout.paymentLinkExpired && <button className="button secondary" disabled={busy} onClick={refreshCheckoutStatus}>{t('refreshPaymentStatus')}</button>}{checkout.paymentStatus === 'paid' && <button className="button secondary" disabled={busy} onClick={() => void printOrder(checkout.orderId!)}>{t('printPdf')}</button>}<span className="muted">{t('statusConfirmedWebhook')}</span></div>}</aside>
     </div>
     {showOrders && <section className="panel orders-panel"><div className="product-row"><div><h2>{t('orders')}</h2><p className="muted">{t('paidOrdersDefault')}</p></div><div className="top-actions"><select aria-label={t('orders')} value={orderFilter} onChange={(event) => setOrderFilter(event.target.value as 'all' | 'paid' | 'pending')}><option value="all">{t('allOrders')}</option><option value="paid">{t('paidOnly')}</option><option value="pending">{t('pendingOnly')}</option></select><button className="button secondary" onClick={() => void loadOrders()}>{t('reload')}</button><button className="button secondary" onClick={() => setShowOrders(false)}>{t('close')}</button></div></div>{busy && <p className="muted">{t('loadingOrders')}</p>}{error && <p className="error">{error}</p>}{!busy && visibleOrders.length === 0 ? <p className="muted">{t('noMatchingOrders')}</p> : <div className="orders">{visibleOrders.map((order) => <div className="order-row" key={order.id}><div><Link className="order-number" href={`/orders/${order.id}`}><strong>{order.orderNumber}</strong></Link><div className="muted">{order.customerName || t('walkIn')} · {formatDate(order.createdAt, locale)}</div></div><div><strong>{money(order.totalAmountMinor, order.currency)}</strong><span className={order.paymentStatus === 'paid' ? 'paid' : 'pending'}>{paymentStatusLabel(order.paymentStatus)}</span><Link className="button secondary" href={`/orders/${order.id}`}>{t('viewOrder')}</Link><button className="button secondary" onClick={async () => { try { const refreshed = await api.refreshOrder(order.id); setOrders((current) => current.map((item) => item.id === order.id ? refreshed : item)); } catch (e) { setError(localizeError(e, t)); } }}>{t('refreshStatus')}</button><button className="button secondary" disabled={order.paymentStatus !== 'paid' || busy} onClick={() => void printOrder(order.id)}>{t('printPdf')}</button></div></div>)}</div>}</section>}
   </main>;

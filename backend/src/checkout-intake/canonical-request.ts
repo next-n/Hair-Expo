@@ -6,7 +6,7 @@ export type CanonicalCheckoutRequest = {
   customerName?: string;
   customerContact?: string;
   expoDiscountEnabled: boolean;
-  items: Array<{ sku?: string; productId: string; variantId?: string; quantity: number; blonde: boolean; weightGrams?: number; color?: string; lengthInches?: number }>;
+  items: Array<{ sku?: string; productId: string; variantId?: string; quantity: number; blonde: boolean; weightGrams?: number; pieces?: number; color?: string; lengthInches?: number }>;
 };
 
 function sortObjectKeys(value: unknown): unknown {
@@ -25,8 +25,8 @@ export function buildCanonicalCheckoutRequest(request: CheckoutIntakeRequestDto,
     customerName: request.customerName?.trim() || undefined,
     customerContact: request.customerContact?.trim() || undefined,
     expoDiscountEnabled: request.expoDiscountEnabled !== false,
-    items: request.items.map(({ productId, variantId, quantity, blonde, weightGrams, color, lengthInches }, index) => ({
-      sku: skus?.[index], productId, variantId, quantity, blonde: blonde === true, weightGrams, color, lengthInches,
+    items: request.items.map(({ productId, variantId, quantity, blonde, weightGrams, pieces, color, lengthInches }, index) => ({
+      sku: skus?.[index], productId, variantId, quantity, blonde: blonde === true, weightGrams, pieces, color, lengthInches,
     })),
   };
 }

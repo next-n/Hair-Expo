@@ -53,7 +53,7 @@ type CheckoutRequest = {
   expoDiscountEnabled?: boolean;
   sourceOrderId?: string;
   pricingSnapshot?: PriceSnapshot;
-  items: Array<{ sku?: string; productId: string; variantId?: string; quantity: number; blonde?: boolean; weightGrams?: number; color?: string; lengthInches?: number }>;
+  items: Array<{ sku?: string; productId: string; variantId?: string; quantity: number; blonde?: boolean; weightGrams?: number; pieces?: number; color?: string; lengthInches?: number }>;
 };
 
 @Injectable()
@@ -99,11 +99,11 @@ export class CheckoutCoreService {
           pricing.totalWeightGrams, pricing.subtotalMinor, pricing.surchargeMinor, pricing.discountMinor,
           pricing.subtotalCnyMinor, pricing.surchargeCnyMinor, pricing.discountCnyMinor, pricing.totalCnyMinor, pricing.selectedDiscountReason, request.sourceOrderId ?? null);
         const insertItem = this.database.connection.prepare(`
-          INSERT INTO order_items (id, order_id, product_id, variant_id, sku_snapshot, name_snapshot, quantity, unit_amount_minor,
+            INSERT INTO order_items (id, order_id, product_id, variant_id, sku_snapshot, name_snapshot, quantity, unit_amount_minor,
             currency, line_total_amount_minor, pricing_metadata_json, created_at, line, product_type, length_in, unit,
-            weight_contribution_grams, blonde, base_unit_amount_minor, base_unit_amount_cny_minor,
+            weight_contribution_grams, pieces_count, blonde, base_unit_amount_minor, base_unit_amount_cny_minor,
             adjusted_unit_amount_minor, adjusted_unit_amount_cny_minor, line_total_cny_minor)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         for (const [index, line] of pricing.lines.entries()) {
           const source = request.items[index];

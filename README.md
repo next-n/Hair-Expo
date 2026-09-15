@@ -256,6 +256,7 @@ Examples of prompts used during the project included:
 3. The real-production hardening review:
 
    > Remaining real-production concerns
+   >
    > 1. Validate payment amount in the webhook
    >
    > The webhook verifies Stripe’s signature and checks that the session is paid, but it does not compare:
@@ -271,6 +272,7 @@ Examples of prompts used during the project included:
    > 3. Harden the web boundary
    >
    > CORS currently accepts reflected origins with credentials. Cookies also lack the Secure flag, while the included Nginx configuration only listens on HTTP. Before public deployment: allow only the frontend domain, add Secure to production cookies, enable HTTPS and HTTP-to-HTTPS redirect, and rate-limit passcode attempts.
+   >
 
 Verification included:
 

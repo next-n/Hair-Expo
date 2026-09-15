@@ -226,3 +226,12 @@ input, select { width: 100%; border: 1px solid var(--line); border-radius: 9px; 
 @media (max-width: 480px) { .mobile-cart-jump { justify-content: stretch; } .mobile-cart-jump .button { flex: 1; width: auto; } }
 @media (prefers-reduced-motion: reduce) { .cart-jump-attention { animation: none; } }
 @media (max-width: 800px) { .shell { padding: 14px; } .grid { grid-template-columns: 1fr; } .topbar { align-items: flex-start; flex-direction: column; } .sticky { position: static; } .order-row { align-items: flex-start; flex-direction: column; } .order-row > div:last-child { flex-wrap: wrap; } }
+.unit-suffix {
+  align-self: center;
+  font-size: 0.85em;
+  color: #667085;
+  margin-left: -4px;
+  margin-right: 4px;
+  min-width: 1.5em;
+  text-align: left;
+}

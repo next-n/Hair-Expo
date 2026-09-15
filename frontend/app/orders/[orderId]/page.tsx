@@ -61,7 +61,17 @@ export default function OrderPage() {
         setError(t('errorGeneric'));
         return;
       }
-      copiedItems.push({ productId: item.productId, variantId: item.variantId, sku: item.sku, quantity: item.quantity, blonde: Boolean(item.blonde) });
+      copiedItems.push({
+        productId: item.productId,
+        variantId: item.variantId,
+        sku: item.sku,
+        quantity: item.quantity,
+        blonde: Boolean(item.blonde),
+        ...(item.unit ? { unit: item.unit } : {}),
+        ...(item.weightContributionGrams != null ? { weightGrams: item.weightContributionGrams } : {}),
+        ...(item.piecesCount != null ? { pieces: item.piecesCount } : {}), 
+        
+      });
     }
     if (copiedItems.length === 0) {
       setError(t('errorGeneric'));
@@ -154,7 +164,8 @@ export default function OrderPage() {
                   <span className="muted">{item.name || item.line || item.productType || ''}</span>
                   <div className="order-item-meta">
                     <span>{item.quantity} {t('invoiceQuantity').toLowerCase()}</span>
-                    {item.weightContributionGrams != null && <span>{new Intl.NumberFormat(locale).format(item.weightContributionGrams)} g</span>}
+                    {item.piecesCount != null && item.piecesCount > 0 && <span>{new Intl.NumberFormat(locale).format(item.piecesCount)} {t('piecesUnit')}</span>}
+                    {item.weightContributionGrams != null && item.weightContributionGrams > 0 && <span>{new Intl.NumberFormat(locale).format(item.weightContributionGrams)} g</span>}
                   </div>
                 </div>
                 <strong>{money(item.lineTotalMinor, order.currency)}</strong>

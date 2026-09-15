@@ -71,3 +71,17 @@ test('invoice includes the backend pricing breakdown', async () => {
   assert.match(invoice, /weightContributionGrams/);
   assert.doesNotMatch(invoice, /totalWeightGrams == null/);
 });
+
+test('per-gram catalog and cart are wired', async () => {
+  const page = await readFile(new URL('../app/page.tsx', import.meta.url), 'utf8');
+  assert.match(page, /isGramUnit/);
+  assert.match(page, /defaultWeightForUnit/);
+  assert.match(page, /pricePerGramUsdMinor/);
+  assert.match(page, /weightDrafts/);
+  assert.match(page, /updateWeight/);
+});
+test('api strips client-only fields before POST', async () => {
+  const api = await readFile(new URL('../lib/api.ts', import.meta.url), 'utf8');
+  assert.match(api, /toDtoItem/);
+  assert.match(api, /weightGrams/);
+});

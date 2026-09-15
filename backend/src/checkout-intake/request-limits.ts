@@ -8,6 +8,7 @@ export const CHECKOUT_LIMITS = {
   // Operational request ceiling; this is not a catalog or pricing rule.
   maxQuantity: positiveSafeIntegerFromEnv('CHECKOUT_MAX_QUANTITY', 10_000),
   maxWeightGrams: 100_000,
+  maxPieces: 100_000, 
   maxLengthInches: 100,
   maxColorLength: 50,
 } as const;

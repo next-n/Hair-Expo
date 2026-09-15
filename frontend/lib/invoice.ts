@@ -19,7 +19,7 @@ export function printInvoice(order: Order, locale: Locale = 'en'): void {
   const discountLabel = order.selectedDiscountReason === 'VOLUME_DISCOUNT' ? text('volumeDiscount') : order.selectedDiscountReason === 'EXPO_DISCOUNT' ? text('expoDiscount') : text('discount');
   const items = order.items ?? [];
   const rows = items.length > 0
-    ? items.map((item) => `<tr><td>${escapeHtml(item.sku)}</td><td>${escapeHtml(item.line ?? item.productType ?? '')}</td><td>${item.quantity}</td><td>${item.weightContributionGrams == null ? '—' : `${new Intl.NumberFormat(locale).format(item.weightContributionGrams)} g`}</td><td>${money(item.lineTotalMinor, currency, locale)}</td></tr>`).join('')
+    ? items.map((item) => `<tr><td>${escapeHtml(item.sku)}</td><td>${escapeHtml(item.line ?? item.productType ?? '')}</td><td>${item.quantity}</td><td>${item.piecesCount && item.piecesCount > 0 ? `${item.piecesCount} pcs` : item.quantity}</td><td>${item.weightContributionGrams == null ? '—' : `${new Intl.NumberFormat(locale).format(item.weightContributionGrams)} g`}</td><td>${money(item.lineTotalMinor, currency, locale)}</td></tr>`).join('')
     : `<tr><td colspan="5">${text('customerDetailsUnavailable')}</td></tr>`;
   const summaryRows = [
     order.subtotalMinor == null ? '' : `<tr><td>${text('subtotal')}</td><td>${money(order.subtotalMinor, currency, locale)}</td></tr>`,

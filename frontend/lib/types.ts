@@ -1,9 +1,47 @@
 export type Product = {
-  id: string; sku: string; name: string; line: string; productType: string; lengthIn: string | null; unit: string; packWeightGrams: number | null; priceUsdMinor: number; priceCnyMinor: number; tags: string[]; variants: Array<{ id: string; name: string; sku: string }>;
+  id: string; sku: string; name: string; line: string; productType: string; lengthIn: string | null;
+  unit: string; packWeightGrams: number | null;
+  priceUsdMinor: number; priceCnyMinor: number;
+  pricePerGramUsdMinor: number | null;   // NEW — null for pack items
+  pricePerGramCnyMinor: number | null;   // NEW — null for pack items
+  pricePerPieceUsdMinor: number | null;   // NEW — null for non-pcs items
+  pricePerPieceCnyMinor: number | null;   // NEW — null for non-pcs items
+  tags: string[]; variants: Array<{ id: string; name: string; sku: string }>;
 };
-export type CartItem = { productId: string; variantId: string; sku: string; quantity: number; blonde: boolean };
-export type PricePreview = { currency: string; lines: Array<{ itemRef: string; lineTotalMinor: number; lineTotalCnyMinor: number; quantity: number; blonde: boolean; sku?: string }>; subtotalMinor: number; subtotalCnyMinor: number; surchargeMinor: number; surchargeCnyMinor: number; discountMinor: number; discountCnyMinor: number; totalMinor: number; totalCnyMinor: number; totalWeightGrams: number; selectedDiscountReason: string | null; adjustments: Array<{ code: string; label: string; type: string; amountMinor: number; amountCnyMinor?: number }>; ruleVersion: string };
+
+export type CartItem = {
+  productId: string;
+  variantId: string;
+  sku: string;
+  quantity: number;
+  weightGrams?: number;                // NEW — only set for per_100g / per_kg
+  unit?: string;                       // NEW — client-side helper
+  packWeightGrams?: number | null;     // NEW — client-side helper
+  pieces?: number;                     // NEW — only set for pack_100pcs / pack_20pcs
+  blonde: boolean;
+};
+
+export type PricePreview = {
+  currency: string;
+  lines: Array<{
+    itemRef: string; lineTotalMinor: number; lineTotalCnyMinor: number; quantity: number;
+    weightContributionGrams?: number; unit?: string; adjustedUnitPriceMinor?: number;
+    pieceContribution?: number; blonde: boolean; sku?: string;
+  }>;
+  subtotalMinor: number; subtotalCnyMinor: number;
+  surchargeMinor: number; surchargeCnyMinor: number;
+  discountMinor: number; discountCnyMinor: number;
+  totalMinor: number; totalCnyMinor: number;
+  totalWeightGrams: number;
+  selectedDiscountReason: string | null;
+  adjustments: Array<{ code: string; label: string; type: string; amountMinor: number; amountCnyMinor?: number }>;
+  ruleVersion: string;
+};
+
 export type CheckoutResponse = { operationId: string; orderId?: string; orderNumber?: string; status: string; paymentStatus?: string; totalAmountMinor: number | null; totalCnyMinor?: number | null; currency: string | null; checkoutUrl: string | null; selectedDiscountReason?: string | null; paymentLinkCreatedAt?: string | null; paymentLinkExpiresAt?: string | null; paymentLinkExpired?: boolean };
-export type OrderItem = { productId?: string | null; variantId?: string | null; sku: string; name?: string | null; line?: string | null; productType?: string | null; lengthIn?: string | null; unit?: string | null; quantity: number; blonde?: number | boolean; baseUnitAmountMinor?: number | null; baseUnitAmountCnyMinor?: number | null; adjustedUnitAmountMinor?: number | null; adjustedUnitAmountCnyMinor?: number | null; weightContributionGrams?: number | null; lineTotalMinor?: number | null; lineTotalCnyMinor?: number | null };
+
+export type OrderItem = { productId?: string | null; variantId?: string | null; sku: string; name?: string | null; line?: string | null; productType?: string | null; lengthIn?: string | null; unit?: string | null; quantity: number; blonde?: number | boolean; baseUnitAmountMinor?: number | null; baseUnitAmountCnyMinor?: number | null; adjustedUnitAmountMinor?: number | null; adjustedUnitAmountCnyMinor?: number | null; weightContributionGrams?: number | null; lineTotalMinor?: number | null; lineTotalCnyMinor?: number | null, piecesCount?: number | null; };
+
 export type OrderAdjustment = { code: string; label: string; type: string; scope: string; itemRef?: string | null; amountMinor: number; amountCnyMinor?: number; ruleVersion: string; metadata?: Record<string, unknown> };
+
 export type Order = { id: string; orderNumber: string; customerName?: string; customerContact?: string; createdAt: string; currency: string; totalAmountMinor: number; totalCnyMinor: number | null; subtotalMinor?: number | null; subtotalCnyMinor?: number | null; surchargeMinor?: number | null; surchargeCnyMinor?: number | null; discountMinor?: number | null; discountCnyMinor?: number | null; totalWeightGrams?: number | null; selectedDiscountReason?: string | null; paymentStatus: string; paymentLinkId?: string | null; checkoutUrl?: string | null; paymentLinkCreatedAt?: string | null; paymentLinkExpiresAt?: string | null; paymentLinkExpired?: boolean; paymentLinkDeactivatedAt?: string | null; recreatedFromOrderId?: string | null; items?: OrderItem[]; adjustments?: OrderAdjustment[] };

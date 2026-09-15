@@ -1,6 +1,7 @@
 import { DefaultPricingEngine } from '../src/pricing/default-pricing-engine';
 import { percentageAmountMinor } from '../src/pricing/pricing-math';
 import { PricingAdjustment, PricingContext, PricingRule } from '../src/pricing/pricing-rule';
+import { BlondeSurchargeRule } from '../src/pricing/rules/blonde-surcharge.rule';
 
 function item(overrides: Partial<{ itemRef: string; quantity: number; baseUnitPriceMinor: number; weightGrams: number }> = {}) {
   return {
@@ -111,5 +112,102 @@ describe('DefaultPricingEngine', () => {
     const second = engine.calculate(input);
     expect(input).toEqual(before);
     expect(second).toEqual(first);
+  });
+});
+
+describe('DefaultPricingEngine weighted items', () => {
+  const gramItem = (overrides: Record<string, unknown> = {}) => ({
+    itemRef: 'item-1',
+    productId: 'product-1',
+    quantity: 1,
+    baseUnitPriceMinor: 8500,   // $85.00 for 100g
+    baseUnitPriceCnyMinor: 59500,
+    unit: 'per_100g',
+    packWeightGrams: 100,
+    sku: 'MG-GW-18',
+    line: 'Magnetar',
+    productType: 'Genius Weft',
+    ...overrides,
+  });
+
+  const kgItem = (overrides: Record<string, unknown> = {}) => ({
+    itemRef: 'item-2',
+    productId: 'product-2',
+    quantity: 1,
+    baseUnitPriceMinor: 120000, // $1200.00 per kg
+    baseUnitPriceCnyMinor: 840000,
+    unit: 'per_kg',
+    packWeightGrams: 1000,
+    sku: 'RAW-SLV-1820',
+    line: 'Raw Hair',
+    productType: 'Slavic',
+    ...overrides,
+  });
+
+  it('prices per_100g items by the exact requested weight', () => {
+    const result = new DefaultPricingEngine().calculate({
+      currency: 'USD',
+      items: [gramItem({ weightGrams: 50 })],
+    });
+    expect(result.lines[0].lineTotalMinor).toBe(4250);      // 85c/g × 50g
+    expect(result.lines[0].weightContributionGrams).toBe(50);
+    expect(result.lines[0].adjustedUnitPriceMinor).toBe(85); // $0.85/g
+    expect(result.totalMinor).toBe(4250);
+  });
+
+  it('prices per_100g items at 250g', () => {
+    const result = new DefaultPricingEngine().calculate({
+      currency: 'USD',
+      items: [gramItem({ weightGrams: 250 })],
+    });
+    expect(result.lines[0].lineTotalMinor).toBe(21250); // $212.50
+  });
+
+  it('prices per_kg items by the exact requested weight', () => {
+    const result = new DefaultPricingEngine().calculate({
+      currency: 'USD',
+      items: [kgItem({ weightGrams: 500 })],
+    });
+    expect(result.lines[0].lineTotalMinor).toBe(60000);      // 120c/g × 500g = $600
+    expect(result.lines[0].adjustedUnitPriceMinor).toBe(120);
+    expect(result.totalMinor).toBe(60000);
+  });
+
+  it('falls back to packWeightGrams × quantity when weightGrams is omitted', () => {
+    const result = new DefaultPricingEngine().calculate({
+      currency: 'USD',
+      items: [gramItem({ quantity: 3 })],
+    });
+    expect(result.lines[0].weightContributionGrams).toBe(300);
+    expect(result.lines[0].lineTotalMinor).toBe(25500); // 85c × 300g
+  });
+
+  it('applies blonde surcharge to the weighted line total', () => {
+    const result = new DefaultPricingEngine([
+      new BlondeSurchargeRule({ enabled: true, version: 'test-blonde-v1' }),
+    ]).calculate({
+      currency: 'USD',
+      items: [gramItem({ weightGrams: 50, blonde: true })],
+    });
+    expect(result.subtotalMinor).toBe(5525);       // base 50g
+    expect(result.surchargeMinor).toBe(1275);      // 30% of 4250
+    expect(result.totalMinor).toBe(5525);
+    expect(result.lines[0].lineTotalMinor).toBe(5525);
+  });
+
+  it('combines a weighted item and a pack item in the same order', () => {
+    const result = new DefaultPricingEngine().calculate({
+      currency: 'USD',
+      items: [
+        gramItem({ itemRef: 'gram', weightGrams: 100 }),
+        {
+          itemRef: 'pack', productId: 'p2', quantity: 2, baseUnitPriceMinor: 5500,
+          unit: 'pack_100pcs', packWeightGrams: 67, sku: 'MG-KT-18',
+          line: 'Magnetar', productType: 'Keratin Tips',
+        },
+      ],
+    });
+    expect(result.totalMinor).toBe(19500);         // 8500 + 11000
+    expect(result.totalWeightGrams).toBe(234);     // 100 + 2×67
   });
 });

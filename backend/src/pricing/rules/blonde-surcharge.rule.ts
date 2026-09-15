@@ -17,16 +17,30 @@ export class BlondeSurchargeRule implements PricingRule {
 
   apply(context: PricingContext): PricingAdjustment[] {
     if (!this.enabled) return [];
-    return context.input.items.filter((item) => item.blonde === true).map((item) => ({
-      code: this.code,
-      label: 'Blonde shade surcharge (30%)',
-      type: 'SURCHARGE' as const,
-      scope: 'ITEM' as const,
-      itemRef: item.itemRef,
-      amountMinor: percentageAmountMinor(item.baseUnitPriceMinor, 3000, 'HALF_UP') * item.quantity,
-      amountCnyMinor: percentageAmountMinor(item.baseUnitPriceCnyMinor ?? item.baseUnitPriceMinor, 3000, 'HALF_UP') * item.quantity,
-      ruleVersion: this.version,
-      metadata: { basisPoints: 3000 },
-    }));
+    
+    const adjustments: PricingAdjustment[] = [];
+    
+    for (const item of context.input.items) {
+      if (item.blonde !== true) continue;
+      
+      // Find the calculated line for this item to get the correct base total
+      // (accounting for weight vs quantity)
+      const line = context.lines.find((l) => l.itemRef === item.itemRef);
+      if (!line) continue; 
+
+      adjustments.push({
+        code: this.code,
+        label: 'Blonde shade surcharge (30%)',
+        type: 'SURCHARGE' as const,
+        scope: 'ITEM' as const,
+        itemRef: item.itemRef,
+        amountMinor: percentageAmountMinor(line.lineTotalMinor, 3000, 'HALF_UP'),
+        amountCnyMinor: percentageAmountMinor(line.lineTotalCnyMinor, 3000, 'HALF_UP'),
+        ruleVersion: this.version,
+        metadata: { basisPoints: 3000 },
+      });
+    }
+    
+    return adjustments;
   }
 }

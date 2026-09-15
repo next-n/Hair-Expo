@@ -2,6 +2,7 @@ import { PricingItemInput, PricingResult } from './pricing-rule';
 
 export interface NormalizedOrderDraftItem extends Omit<PricingItemInput, 'baseUnitPriceMinor'> {
   readonly baseUnitPriceMinor?: number;
+  readonly color?: string; 
 }
 
 export interface NormalizedOrderDraft {
