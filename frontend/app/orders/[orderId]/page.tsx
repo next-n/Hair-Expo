@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { api } from '../../../lib/api';
 import { COMPANY_DETAILS, COMPANY_NAME } from '../../../lib/company';
-import { formatDate, formatMinor, LanguageSwitcher, localizeError, useI18n } from '../../../lib/i18n';
+import { formatDate, formatExactCents, formatMinor, LanguageSwitcher, localizeError, useI18n } from '../../../lib/i18n';
 import { printInvoice } from '../../../lib/invoice';
 import { CartItem, Order } from '../../../lib/types';
 import { PaymentLinkCountdown } from '../../../components/payment-link-countdown';
@@ -184,9 +184,16 @@ export default function OrderPage() {
                             .replace(/\s*per\s*kg\s*$/i, '')
                             .replace(/\s*pack of \d+\s*$/i, '')
                             .trim();
-                          const unitPrice = item.adjustedUnitAmountMinor;
                           const unitLabel = isGram ? t('gramsUnit') : t('piecesUnit');
-                          return unitPrice != null ? `${cleaned} · ${money(unitPrice, order.currency)} / ${unitLabel}` : cleaned;
+                          // Exact unit price: base × 1.30 for blonde, base otherwise.
+                          const divisor = item.unit === 'per_100g' ? 100
+                                        : item.unit === 'per_kg' ? 1000
+                                        : item.unit === 'pack_100pcs' ? 100
+                                        : item.unit === 'pack_20pcs' ? 20
+                                        : 1;
+                          const baseUnitCents = item.baseUnitAmountMinor != null ? item.baseUnitAmountMinor / divisor : null;
+                          const exactUnitCents = baseUnitCents != null && isBlonde ? baseUnitCents * 1.30 : baseUnitCents;
+                          return exactUnitCents != null ? `${cleaned} · ${formatExactCents(exactUnitCents)} / ${unitLabel}` : cleaned;
                         })()}
                       </span>
                       {!isGram && !isPiece && (

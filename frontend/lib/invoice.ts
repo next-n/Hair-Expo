@@ -1,5 +1,5 @@
 import { COMPANY_DETAILS, COMPANY_NAME } from './company';
-import { formatDate, formatMinor, message, Locale } from './i18n';
+import { formatDate, formatExactCents, formatMinor, message, Locale } from './i18n';
 import { Order, OrderItem } from './types';
 function escapeHtml(value: string): string {
   return value.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character] ?? character);
@@ -72,9 +72,15 @@ const rows = items.length > 0
           .replace(/\s*per\s*kg\s*$/i, '')
           .replace(/\s*pack of \d+\s*$/i, '')
           .trim();
-        const unitPrice = item.adjustedUnitAmountMinor;
         const unitLabel = isGram ? text('gramsUnit') : text('piecesUnit');
-        return unitPrice != null ? `${cleaned} · ${money(unitPrice, currency, locale)} / ${unitLabel}` : cleaned;
+        const divisor = item.unit === 'per_100g' ? 100
+                      : item.unit === 'per_kg' ? 1000
+                      : item.unit === 'pack_100pcs' ? 100
+                      : item.unit === 'pack_20pcs' ? 20
+                      : 1;
+        const baseUnitCents = item.baseUnitAmountMinor != null ? item.baseUnitAmountMinor / divisor : null;
+        const exactUnitCents = baseUnitCents != null && isBlonde ? baseUnitCents * 1.30 : baseUnitCents;
+        return exactUnitCents != null ? `${cleaned} · ${formatExactCents(exactUnitCents)} / ${unitLabel}` : cleaned;
       })();
       return `<tr>
         <td>${escapeHtml(skuLabel)}</td>

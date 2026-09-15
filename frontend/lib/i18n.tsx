@@ -262,3 +262,16 @@ export function LanguageSwitcher() {
   const { locale, setLocale, t } = useI18n();
   return <label className="language-switcher"><span>{t('language')}</span><select aria-label={t('language')} value={locale} onChange={(event) => setLocale(event.target.value as Locale)}><option value="en">{t('english')}</option><option value="zh-CN">{t('chinese')}</option><option value="ru">{t('russian')}</option><option value="my">{t('burmese')}</option></select></label>;
 }
+/**
+ * Format integer cents with up to 3 decimals, dropping trailing zeros.
+ * Needed for per-gram / per-piece unit prices where the blonde surcharge
+ * can land on half a cent (e.g. $1.65 × 1.30 = $2.145/g).
+ * Falls back to standard 2-decimal currency for exact cent values.
+ */
+export function formatExactCents(cents: number | null | undefined): string {
+  if (cents == null || !Number.isFinite(cents)) return '—';
+  const dollars = cents / 100;
+  const fixed = dollars.toFixed(4);                         // "2.1450"
+  const trimmed = fixed.replace(/0+$/, '').replace(/\.$/, ''); // "2.145"
+  return `$${trimmed}`;
+}
